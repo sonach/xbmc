@@ -48,7 +48,7 @@ cd $BUILD_DIR
 
 # Build NEON
 echo "Building NEON"
-build neon-script-testing master $TOOLS_PREFIX
+build neon-script-testing android-neon $TOOLS_PREFIX
 
 # Build non-NEON
 echo "Building non-NEON"
