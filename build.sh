@@ -39,7 +39,7 @@ function build {
     echo "    Making apk explicitly just in case"
     make apk || exit 1
     echo "    Publishing"
-    ~/xbmc/xbmc.kmn/publish.sh $TYPE || exit 1
+    bash ~/xbmc/xbmc.kmn/publish.sh $TYPE || exit 1
 }
 
 # Clone repo
