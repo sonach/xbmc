@@ -48,11 +48,11 @@ cd $BUILD_DIR
 
 # Build NEON
 echo "Building NEON"
-build neon-script-testing android-neon $TOOLS_PREFIX
+build full-neon android-neon $TOOLS_PREFIX
 
 # Build non-NEON
 echo "Building non-NEON"
-build non-neon-script-testing android-tegra2 ${TOOLS_PREFIX}/xbmc.tegra2
+build no-neon android-tegra2 ${TOOLS_PREFIX}/xbmc.tegra2
 
 # Remind user to cleanup build dir
 echo "Don't forget to cleanup / remove ${BUILD_DIR}"
