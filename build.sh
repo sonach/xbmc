@@ -14,8 +14,7 @@ function build {
 
 	echo $TOOLS_PREFIX
 
-    #git clean -f -d -x -n
-	#exit 1
+    git clean -f -d -x 
     git checkout $BRANCH
     echo "    tools/android/depends"
     cd tools/android/depends
@@ -50,11 +49,8 @@ cd $BUILD_DIR
 # Build NEON
 echo "Building NEON"
 build full-neon android-neon $TOOLS_PREFIX
-rm -rf $BUILD_DIR
 
 # Build non-NEON
-git clone ~/xbmc/xbmc.kmn $BUILD_DIR
-cd $BUILD_DIR
 echo "Building non-NEON"
 build no-neon android-tegra2 ${TOOLS_PREFIX}/xbmc.tegra2
 
