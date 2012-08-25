@@ -7,6 +7,7 @@ TYPE=$3
 
 echo $BUILD_DIR
 echo $TOOLS_PREFIX
+echo $TYPE
 
 function build {
 	TYPE=$1
