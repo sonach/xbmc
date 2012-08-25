@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Change dir to git clone
-cd ~/xbmc/xbmc.kmn
+#cd ~/xbmc/xbmc.kmn
 
 # Sync upstream/master
 echo "Syncing upstream/master"
