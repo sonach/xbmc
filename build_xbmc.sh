@@ -11,8 +11,8 @@ echo $TYPE
 
 cd $BUILD_DIR
 
-bash build_deps.sh
+make -C tools/android/depends/xbmc || exit 1
 
-bash build_xbmc.sh
+make || exit 1
 
-bash ~/xbmc/xbmc.kmn/publish.sh $TYPE || exit 1
+make apk || exit 1

@@ -7,6 +7,7 @@ cd ~/xbmc/xbmc.kmn
 echo "Syncing upstream/master"
 git checkout master
 git pull --rebase upstream master
+git push
 
 # Merge changes onto origin/android-neon
 echo "Merging master onto origin/android-neon"
