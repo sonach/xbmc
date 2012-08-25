@@ -9,6 +9,8 @@ echo $BUILD_DIR
 echo $TOOLS_PREFIX
 echo $TYPE
 
+cd $BUILD_DIR
+
 function build {
 	TYPE=$1
     #BRANCH=$2
