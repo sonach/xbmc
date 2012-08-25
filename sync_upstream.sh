@@ -21,5 +21,6 @@ git merge origin/master
 
 # Reset to android-neon branch
 git checkout android-neon
+git push
 
 echo "Done"
