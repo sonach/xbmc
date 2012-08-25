@@ -3,19 +3,20 @@
 
 BUILD_DIR=$1
 TOOLS_PREFIX=$2
+TYPE=$3
 
 echo $BUILD_DIR
 echo $TOOLS_PREFIX
 
 function build {
 	TYPE=$1
-    BRANCH=$2
-	TOOLS_PREFIX=$3
+    #BRANCH=$2
+	TOOLS_PREFIX=$2
 
 	echo $TOOLS_PREFIX
 
-    git clean -f -d -x 
-    git checkout $BRANCH
+    #git clean -f -d -x 
+    #git checkout $BRANCH
     echo "    tools/android/depends"
     cd tools/android/depends
     echo "        Run bootstrap"
@@ -43,17 +44,18 @@ function build {
 }
 
 # Clone repo
-git clone ~/xbmc/xbmc.kmn $BUILD_DIR
-cd $BUILD_DIR
+#git clone ~/xbmc/xbmc.kmn $BUILD_DIR
+#cd $BUILD_DIR
 
 # Build NEON
-echo "Building NEON"
-build full-neon android-neon $TOOLS_PREFIX
+#echo "Building NEON"
+#build full-neon android-neon $TOOLS_PREFIX
 
 # Build non-NEON
-echo "Building non-NEON"
-build no-neon android-tegra2 ${TOOLS_PREFIX}/xbmc.tegra2
+#echo "Building non-NEON"
+#build no-neon android-tegra2 ${TOOLS_PREFIX}/xbmc.tegra2
 
 # Remind user to cleanup build dir
-echo "Don't forget to cleanup / remove ${BUILD_DIR}"
+#echo "Don't forget to cleanup / remove ${BUILD_DIR}"
 
+build $TYPE $TOOLS_PREFIX
