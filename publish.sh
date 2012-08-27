@@ -5,4 +5,5 @@ TYPE=$1
 SRC=$2
 
 echo $TYPE
+echo $REV
 cp ${SRC}/xbmcapp-armeabi-v7a-debug.apk /scratch/xbmc/dist/xbmcapp-armeabi-v7a-debug-${REV}-${TYPE}.apk
