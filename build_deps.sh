@@ -23,5 +23,6 @@ cd tools/android/depends
         --with-sdk-platform=android-9 || exit 1
 
 make -j10
+make
 
 cd ../../../
