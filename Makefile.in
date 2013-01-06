@@ -162,6 +162,10 @@ ifeq (@USE_OMXPLAYER@,1)
 DIRECTORY_ARCHIVES += xbmc/cores/omxplayer/omxplayer.a
 endif
 
+ifeq (@USE_HISPLAYER@,1)
+DIRECTORY_ARCHIVES += xbmc/cores/hisplayer/hisplayer.a
+endif
+
 PAPCODECS_DIRS= \
 	lib/xbadpcm \
 	lib/nosefart \
