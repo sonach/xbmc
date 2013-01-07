@@ -30,6 +30,9 @@
 #if defined(HAS_OMXPLAYER)
 #include "cores/omxplayer/OMXPlayer.h"
 #endif
+#if defined(HAS_HISPLAYER)
+#include "cores/hisplayer/HISPlayer.h"
+#endif
 #include "cores/ExternalPlayer/ExternalPlayer.h"
 #include "utils/log.h"
 
@@ -97,6 +100,9 @@ public:
 #if defined(HAS_OMXPLAYER)
       case EPC_OMXPLAYER: pPlayer = new COMXPlayer(callback); break;
 #endif
+#if defined(HAS_HISPLAYER)
+			case EPC_HISPLAYER: pPlayer = new CHISPlayer(callback); break;
+#endif	
       default: return NULL;
     }
 
