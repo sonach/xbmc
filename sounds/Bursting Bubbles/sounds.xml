@@ -22,6 +22,9 @@
 <!-- <activate> and <deactivate> are the events a sound can be mapped to    -->
 <!-- by setting the file to play.                                           -->
 
+<!-- This is added to test the git                                          -->
+<!-- You can add window you need.                                           -->
+
 <!-- Note: Only wav files are supported                                     -->
 
 <sounds>
