@@ -32,11 +32,13 @@
 #include "storage/MediaManager.h"
 #include "settings/Settings.h"
 #include "settings/GUISettings.h"
+#include "guilib/Key.h"
 #include "guilib/LocalizeStrings.h"
 #include "utils/log.h"
 #include "utils/URIUtils.h"
 #include "Autorun.h"
 #include "cdrip/CDDARipper.h"
+#include "cores/IPlayer.h"
 
 #define CONTROL_BTNVIEWASICONS     2
 #define CONTROL_BTNSORTBY          3
@@ -254,7 +256,7 @@ void CGUIWindowMusicSongs::UpdateButtons()
 
   // Disable scan button if shoutcast
   if (m_vecItems->IsVirtualDirectoryRoot() ||
-      m_vecItems->IsLastFM() || m_vecItems->IsMusicDb())
+      m_vecItems->IsMusicDb())
   {
     CONTROL_DISABLE(CONTROL_BTNSCAN);
   }
@@ -318,9 +320,9 @@ void CGUIWindowMusicSongs::GetContextButtons(int itemNumber, CContextButtons &bu
         return;
       if (!item->IsPlayList() && !item->IsPlugin() && !item->IsScript())
       {
-        if (item->IsAudio() && !item->IsLastFM())
+        if (item->IsAudio())
           buttons.Add(CONTEXT_BUTTON_SONG_INFO, 658); // Song Info
-        else if (!item->IsParentFolder() && !item->IsLastFM() &&
+        else if (!item->IsParentFolder() &&
                  !item->GetPath().Left(3).Equals("new") && item->m_bIsFolder)
         {
 #if 0
@@ -363,7 +365,6 @@ void CGUIWindowMusicSongs::GetContextButtons(int itemNumber, CContextButtons &bu
     if (g_application.IsMusicScanning())
       buttons.Add(CONTEXT_BUTTON_STOP_SCANNING, 13353); // Stop Scanning
     else if (!inPlaylists && !m_vecItems->IsInternetStream()           &&
-             !item->IsLastFM()                                         &&
              !item->GetPath().Equals("add") && !item->IsParentFolder() &&
              !item->IsPlugin()                                         &&
              !item->GetPath().Left(9).Equals("addons://")              &&

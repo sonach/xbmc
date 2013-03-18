@@ -31,6 +31,7 @@
 #include "addons/GUIDialogAddonSettings.h"
 #include "dialogs/GUIDialogFileBrowser.h"
 #include "guilib/GUIKeyboardFactory.h"
+#include "guilib/Key.h"
 #include "dialogs/GUIDialogKaiToast.h"
 #include "dialogs/GUIDialogNumeric.h"
 #include "dialogs/GUIDialogProgress.h"
@@ -43,10 +44,9 @@
 #include "addons/AddonInstaller.h"
 #include "addons/AddonManager.h"
 #include "addons/PluginSource.h"
-#include "music/LastFmManager.h"
 #include "utils/log.h"
 #include "storage/MediaManager.h"
-#include "utils/RssReader.h"
+#include "utils/RssManager.h"
 #include "PartyModeManager.h"
 #include "settings/Settings.h"
 #include "utils/StringUtils.h"
@@ -54,6 +54,7 @@
 #include "Util.h"
 #include "URL.h"
 #include "music/MusicDatabase.h"
+#include "cores/IPlayer.h"
 
 #include "filesystem/PluginDirectory.h"
 #ifdef HAS_FILESYSTEM_RAR
@@ -172,8 +173,6 @@ const BUILT_IN commands[] = {
   { "ExportLibrary",              true,   "Export the video/music library" },
   { "PageDown",                   true,   "Send a page down event to the pagecontrol with given id" },
   { "PageUp",                     true,   "Send a page up event to the pagecontrol with given id" },
-  { "LastFM.Love",                false,  "Add the current playing last.fm radio track to the last.fm loved tracks" },
-  { "LastFM.Ban",                 false,  "Ban the current playing last.fm radio track" },
   { "Container.Refresh",          false,  "Refresh current listing" },
   { "Container.Update",           false,  "Update current listing. Send Container.Update(path,replace) to reset the path history" },
   { "Container.NextViewMode",     false,  "Move to the next view type (and refresh the listing)" },
@@ -670,9 +669,7 @@ int CBuiltins::Execute(const CStdString& execString)
   }
   else if (execute.Equals("refreshrss"))
   {
-    g_rssManager.Stop();
-    g_settings.LoadRSSFeeds();
-    g_rssManager.Start();
+    CRssManager::Get().Reload();
   }
   else if (execute.Equals("playercontrol"))
   {
@@ -1399,14 +1396,6 @@ int CBuiltins::Execute(const CStdString& execString)
         musicdatabase.Close();
       }
     }
-  }
-  else if (execute.Equals("lastfm.love"))
-  {
-    CLastFmManager::GetInstance()->Love(parameter.Equals("false") ? false : true);
-  }
-  else if (execute.Equals("lastfm.ban"))
-  {
-    CLastFmManager::GetInstance()->Ban(parameter.Equals("false") ? false : true);
   }
   else if (execute.Equals("control.move") && params.size() > 1)
   {

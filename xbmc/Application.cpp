@@ -30,6 +30,7 @@
 #include "Util.h"
 #include "URL.h"
 #include "guilib/TextureManager.h"
+#include "cores/IPlayer.h"
 #include "cores/dvdplayer/DVDFileInfo.h"
 #include "cores/AudioEngine/AEFactory.h"
 #include "cores/AudioEngine/Utils/AEUtil.h"
@@ -61,8 +62,6 @@
 #endif
 #include "input/ButtonTranslator.h"
 #include "guilib/GUIAudioManager.h"
-#include "network/libscrobbler/lastfmscrobbler.h"
-#include "network/libscrobbler/librefmscrobbler.h"
 #include "GUIPassword.h"
 #include "input/InertialScrollingHandler.h"
 #include "ApplicationMessenger.h"
@@ -86,7 +85,6 @@
 #include "utils/TimeUtils.h"
 #include "GUILargeTextureManager.h"
 #include "TextureCache.h"
-#include "music/LastFmManager.h"
 #include "playlists/SmartPlayList.h"
 #ifdef HAS_FILESYSTEM_RAR
 #include "filesystem/RarManager.h"
@@ -407,6 +405,9 @@ CApplication::CApplication(void)
   XInitThreads();
 #endif
 
+  // we start in frontend
+  m_bInBackground = false;
+
   /* for now always keep this around */
 #ifdef HAS_KARAOKE
   m_pKaraokeMgr = new CKaraokeLyricsManager();
@@ -522,6 +523,19 @@ bool CApplication::OnEvent(XBMC_Event& newEvent)
       break;
     case XBMC_APPCOMMAND:
       return g_application.OnAppCommand(newEvent.appcommand.action);
+    case XBMC_TOUCH:
+    {
+      int windowId = g_windowManager.GetActiveWindow() & WINDOW_ID_MASK;
+      int actionId = 0;
+      if (newEvent.touch.action == ACTION_GESTURE_BEGIN || newEvent.touch.action == ACTION_GESTURE_END)
+        actionId = newEvent.touch.action;
+      else if (!CButtonTranslator::GetInstance().TranslateTouchAction(windowId, newEvent.touch.action, newEvent.touch.pointers, actionId) ||
+          actionId <= 0)
+        return false;
+
+      CApplicationMessenger::Get().SendAction(CAction(actionId, 0, newEvent.touch.x, newEvent.touch.y, newEvent.touch.x2, newEvent.touch.y2), WINDOW_INVALID, false);
+      break;
+    }
   }
   return true;
 }
@@ -1635,7 +1649,7 @@ bool CApplication::StartJSONRPCServer()
     if (CTCPServer::StartServer(g_advancedSettings.m_jsonTcpPort, g_guiSettings.GetBool("services.esallinterfaces")))
     {
       std::vector<std::pair<std::string, std::string> > txt;
-      CZeroconf::GetInstance()->PublishService("servers.jsonrpc-tpc", "_xbmc-jsonrpc._tcp", g_infoManager.GetLabel(SYSTEM_FRIENDLY_NAME), g_advancedSettings.m_jsonTcpPort, txt);
+      CZeroconf::GetInstance()->PublishService("servers.jsonrpc-tcp", "_xbmc-jsonrpc._tcp", g_infoManager.GetLabel(SYSTEM_FRIENDLY_NAME), g_advancedSettings.m_jsonTcpPort, txt);
       return true;
     }
     else
@@ -2250,8 +2264,8 @@ void CApplication::NewFrame()
 
 void CApplication::Render()
 {
-  // do not render if we are stopped
-  if (m_bStop)
+  // do not render if we are stopped or in background
+  if (m_bStop || m_bInBackground)
     return;
 
   if (!m_AppActive && !m_bStop && (!IsPlayingVideo() || IsPaused()))
@@ -2733,6 +2747,10 @@ bool CApplication::OnAction(const CAction &action)
     return true;
   }
 
+  // forward action to g_PVRManager and break if it was able to handle it
+  if (g_PVRManager.OnAction(action))
+    return true;
+
   if (IsPlaying())
   {
     // forward channel switches to the player - he knows what to do
@@ -2862,11 +2880,15 @@ bool CApplication::OnAction(const CAction &action)
 
   if (action.GetID() == ACTION_TOGGLE_DIGITAL_ANALOG)
   {
-    switch(g_guiSettings.GetInt("audiooutput.mode"))
+    // we are only allowed to SetInt to a value supported in GUISettings, so we keep trying until it sticks
+    int mode = g_guiSettings.GetInt("audiooutput.mode");
+    for (int i = 0; i < AUDIO_COUNT; i++)
     {
-      case AUDIO_ANALOG: g_guiSettings.SetInt("audiooutput.mode", AUDIO_IEC958); break;
-      case AUDIO_IEC958: g_guiSettings.SetInt("audiooutput.mode", AUDIO_HDMI  ); break;
-      case AUDIO_HDMI  : g_guiSettings.SetInt("audiooutput.mode", AUDIO_ANALOG); break;
+      if (++mode == AUDIO_COUNT)
+        mode = 0;
+      g_guiSettings.SetInt("audiooutput.mode", mode);
+      if (g_guiSettings.GetInt("audiooutput.mode") == mode)
+         break;
     }
 
     g_application.Restart();
@@ -3452,9 +3474,6 @@ bool CApplication::Cleanup()
     g_charsetConverter.clear();
     g_directoryCache.Clear();
     CButtonTranslator::GetInstance().Clear();
-    CLastfmScrobbler::RemoveInstance();
-    CLibrefmScrobbler::RemoveInstance();
-    CLastFmManager::RemoveInstance();
 #ifdef HAS_EVENT_SERVER
     CEventServer::RemoveInstance();
 #endif
@@ -3641,11 +3660,6 @@ bool CApplication::PlayMedia(const CFileItem& item, int iPlaylist)
     if (XFILE::CPluginDirectory::GetPluginResult(item.GetPath(), item_new))
       return PlayMedia(item_new, iPlaylist);
     return false;
-  }
-  if (item.IsLastFM())
-  {
-    g_partyModeManager.Disable();
-    return CLastFmManager::GetInstance()->ChangeStation(item.GetAsUrl());
   }
   if (item.IsSmartPlayList())
   {
@@ -4189,12 +4203,6 @@ void CApplication::OnPlayBackEnded()
   data["end"] = true;
   CAnnouncementManager::Announce(Player, "xbmc", "OnStop", m_itemCurrentFile, data);
 
-  if (IsPlayingAudio())
-  {
-    CLastfmScrobbler::GetInstance()->SubmitQueue();
-    CLibrefmScrobbler::GetInstance()->SubmitQueue();
-  }
-
   CGUIMessage msg(GUI_MSG_PLAYBACK_ENDED, 0, 0);
   g_windowManager.SendThreadMessage(msg);
 }
@@ -4222,12 +4230,6 @@ void CApplication::OnQueueNextItem()
   g_pythonParser.OnQueueNextItem(); // currently unimplemented
 #endif
 
-  if(IsPlayingAudio())
-  {
-    CLastfmScrobbler::GetInstance()->SubmitQueue();
-    CLibrefmScrobbler::GetInstance()->SubmitQueue();
-  }
-
   CGUIMessage msg(GUI_MSG_QUEUE_NEXT_ITEM, 0, 0);
   g_windowManager.SendThreadMessage(msg);
 }
@@ -4246,9 +4248,6 @@ void CApplication::OnPlayBackStopped()
   CVariant data(CVariant::VariantTypeObject);
   data["end"] = false;
   CAnnouncementManager::Announce(Player, "xbmc", "OnStop", m_itemCurrentFile, data);
-
-  CLastfmScrobbler::GetInstance()->SubmitQueue();
-  CLibrefmScrobbler::GetInstance()->SubmitQueue();
 
   CGUIMessage msg( GUI_MSG_PLAYBACK_STOPPED, 0, 0 );
   g_windowManager.SendThreadMessage(msg);
@@ -4619,6 +4618,8 @@ bool CApplication::WakeUpScreenSaver(bool bPowerOffKeyPressed /* = false */)
 
 void CApplication::CheckScreenSaverAndDPMS()
 {
+  if (m_bInBackground)
+    return;
   if (!m_dpmsIsActive)
     g_Windowing.ResetOSScreensaver();
 
@@ -4709,6 +4710,15 @@ void CApplication::ActivateScreenSaver(bool forceType /*= false */)
     return;
   else if (!m_screenSaver->ID().IsEmpty())
     g_windowManager.ActivateWindow(WINDOW_SCREENSAVER);
+}
+
+void CApplication::SetInBackground(bool background)
+{
+  if (!background)
+  {
+    ResetScreenSaverTimer();
+  }
+  m_bInBackground = background;
 }
 
 void CApplication::CheckShutdown()
@@ -4807,7 +4817,6 @@ bool CApplication::OnMessage(CGUIMessage& message)
         *m_itemCurrentFile = *item;
       }
       g_infoManager.SetCurrentItem(*m_itemCurrentFile);
-      CLastFmManager::GetInstance()->OnSongChange(*m_itemCurrentFile);
       g_partyModeManager.OnSongChange(true);
 
       CVariant param;
@@ -4836,13 +4845,6 @@ bool CApplication::OnMessage(CGUIMessage& message)
             m_pKaraokeMgr->Start(m_itemCurrentFile->GetPath());
         }
 #endif
-        // Let scrobbler know about the track
-        const CMusicInfoTag* tag=g_infoManager.GetCurrentSongTag();
-        if (tag)
-        {
-          CLastfmScrobbler::GetInstance()->AddSong(*tag, CLastFmManager::GetInstance()->IsRadioEnabled());
-          CLibrefmScrobbler::GetInstance()->AddSong(*tag, CLastFmManager::GetInstance()->IsRadioEnabled());
-        }
       }
 
       return true;
@@ -4925,10 +4927,6 @@ bool CApplication::OnMessage(CGUIMessage& message)
       }
       else
       {
-        // stop lastfm
-        if (CLastFmManager::GetInstance()->IsRadioEnabled())
-          CLastFmManager::GetInstance()->StopRadio();
-
         // reset any forced player
         m_eForcedNextPlayer = EPC_NONE;
 
@@ -5059,7 +5057,7 @@ void CApplication::Process()
   if (g_application.m_bStop) return; //we're done, everything has been unloaded
 
   // check how far we are through playing the current item
-  // and do anything that needs doing (lastfm submission, playcount updates etc)
+  // and do anything that needs doing (playcount updates etc)
   CheckPlayingProgress();
 
   // update sound
@@ -5099,12 +5097,6 @@ void CApplication::ProcessSlow()
 
   // Store our file state for use on close()
   UpdateFileState();
-
-  if (IsPlayingAudio())
-  {
-    CLastfmScrobbler::GetInstance()->UpdateStatus();
-    CLibrefmScrobbler::GetInstance()->UpdateStatus();
-  }
 
   // Check if we need to activate the screensaver / DPMS.
   CheckScreenSaverAndDPMS();

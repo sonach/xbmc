@@ -28,6 +28,7 @@
 #include "windowing/WindowingFactory.h"
 #include "utils/URIUtils.h"
 #include "utils/StringUtils.h"
+#include "cores/IPlayer.h"
 #include "cores/AudioEngine/AEFactory.h"
 #include "cores/AudioEngine/Utils/AEConvert.h"
 #ifdef _LINUX
@@ -63,7 +64,7 @@ void CAudioBuffer::Set(const float* psBuffer, int iSize)
   for (int i = iSize; i < m_iLen; ++i) m_pBuffer[i] = 0;
 }
 
-bool CVisualisation::Create(int x, int y, int w, int h)
+bool CVisualisation::Create(int x, int y, int w, int h, void *device)
 {
   m_pInfo = new VIS_PROPS;
   #ifdef HAS_DX

@@ -22,12 +22,10 @@
 
 #include "threads/CriticalSection.h"
 #include "utils/StdString.h"
-#include "guilib/Key.h"
+#include "guilib/WindowIDs.h"
 #include "threads/Thread.h"
 #include "threads/Event.h"
 #include <boost/shared_ptr.hpp>
-
-#include "PlatformDefs.h"
 
 #include <queue>
 #include "utils/GlobalsHandling.h"
@@ -38,6 +36,7 @@ class CGUIDialog;
 class CGUIWindow;
 class CGUIMessage;
 class CVideoInfoTag;
+class CAction;
 
 namespace MUSIC_INFO
 {
@@ -52,9 +51,11 @@ namespace MUSIC_INFO
 
 #define TMSG_MEDIA_PLAY           200
 #define TMSG_MEDIA_STOP           201
+// the PAUSE is indeed a PLAYPAUSE
 #define TMSG_MEDIA_PAUSE          202
 #define TMSG_MEDIA_RESTART        203
 #define TMSG_MEDIA_UNPAUSE        204
+#define TMSG_MEDIA_PAUSE_IF_PLAYING   205
 
 #define TMSG_PLAYLISTPLAYER_PLAY  210
 #define TMSG_PLAYLISTPLAYER_NEXT  211
@@ -113,13 +114,13 @@ namespace MUSIC_INFO
 
 typedef struct
 {
-  DWORD dwMessage;
-  DWORD dwParam1;
-  DWORD dwParam2;
+  unsigned int dwMessage;
+  unsigned int dwParam1;
+  unsigned int dwParam2;
   CStdString strParam;
   std::vector<CStdString> params;
   boost::shared_ptr<CEvent> waitEvent;
-  LPVOID lpVoid;
+  void* lpVoid;
 }
 ThreadMessage;
 
@@ -168,6 +169,8 @@ public:
   void MediaPlay(int playlistid, int song = -1);
   void MediaStop(bool bWait = true, int playlistid = -1);
   void MediaPause();
+  void MediaUnPause();
+  void MediaPauseIfPlaying();
   void MediaRestart(bool bWait);
 
   void PlayListPlayerPlay();
@@ -216,7 +219,7 @@ public:
   int SetResponse(CStdString response);
   void ExecBuiltIn(const CStdString &command, bool wait = false);
 
-  void NetworkMessage(DWORD dwMessage, DWORD dwParam = 0);
+  void NetworkMessage(unsigned int dwMessage, unsigned int dwParam = 0);
 
   void DoModal(CGUIDialog *pDialog, int iWindowID, const CStdString &param = "");
   void Show(CGUIDialog *pDialog);
