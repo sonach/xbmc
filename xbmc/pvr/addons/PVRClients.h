@@ -1,6 +1,6 @@
 #pragma once
 /*
- *      Copyright (C) 2012 Team XBMC
+ *      Copyright (C) 2012-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -631,5 +631,6 @@ namespace PVR
     bool                  m_bNoAddonWarningDisplayed; /*!< true when a warning was displayed that no add-ons were found, false otherwise */
     CCriticalSection      m_critSection;
     CAddonDatabase        m_addonDb;
+    std::map<int, time_t> m_connectionAttempts;       /*!< last connection attempt per add-on */
   };
 }

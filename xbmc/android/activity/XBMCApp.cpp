@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2012 Team XBMC
+ *      Copyright (C) 2012-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -44,6 +44,7 @@
 #include "guilib/GUIWindowManager.h"
 #include "utils/log.h"
 #include "ApplicationMessenger.h"
+#include "JNIThreading.h"
 
 #define GIGABYTES       1073741824
 
@@ -63,179 +64,135 @@ CXBMCApp::CXBMCApp(ANativeActivity *nativeActivity)
   : m_wakeLock(NULL)
 {
   m_activity = nativeActivity;
-  
+  m_firstrun = true;
+  m_exiting=false;
   if (m_activity == NULL)
   {
     android_printf("CXBMCApp: invalid ANativeActivity instance");
     exit(1);
     return;
   }
-
-  m_state.appState = Uninitialized;
-
-  if (pthread_mutex_init(&m_state.mutex, NULL) != 0)
-  {
-    android_printf("CXBMCApp: pthread_mutex_init() failed");
-    m_state.appState = Error;
-    exit(1);
-    return;
-  }
-
 }
 
 CXBMCApp::~CXBMCApp()
 {
-  stop();
-
-  pthread_mutex_destroy(&m_state.mutex);
-}
-
-ActivityResult CXBMCApp::onActivate()
-{
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
-
-  switch (m_state.appState)
-  {
-    case Uninitialized:
-      acquireWakeLock();
-      
-      pthread_attr_t attr;
-      pthread_attr_init(&attr);
-      pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-      pthread_create(&m_state.thread, &attr, thread_run<CXBMCApp, &CXBMCApp::run>, this);
-      pthread_attr_destroy(&attr);
-      break;
-      
-    case Unfocused:
-      XBMC_Pause(false);
-      setAppState(Rendering);
-      break;
-      
-    case Paused:
-      acquireWakeLock();
-      
-      XBMC_SetupDisplay();
-      XBMC_Pause(false);
-      setAppState(Rendering);
-      break;
-
-    case Initialized:
-    case Rendering:
-    case Stopping:
-    case Stopped:
-    case Error:
-    default:
-      break;
-  }
-  
-  return ActivityOK;
-}
-
-void CXBMCApp::onDeactivate()
-{
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
-  // this is called on pause, stop and window destroy which
-  // require specific (and different) actions
 }
 
 void CXBMCApp::onStart()
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
-  // wait for onCreateWindow() and onGainFocus()
+  android_printf("%s: ", __PRETTY_FUNCTION__);
+  if (!m_firstrun)
+  {
+    android_printf("%s: Already running, ignoring request to start", __PRETTY_FUNCTION__);
+    return;
+  }
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+  pthread_create(&m_thread, &attr, thread_run<CXBMCApp, &CXBMCApp::run>, this);
+  pthread_attr_destroy(&attr);
 }
 
 void CXBMCApp::onResume()
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
-  // wait for onCreateWindow() and onGainFocus()
+  android_printf("%s: ", __PRETTY_FUNCTION__);
 }
 
 void CXBMCApp::onPause()
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
-  // wait for onDestroyWindow() and/or onLostFocus()
+  android_printf("%s: ", __PRETTY_FUNCTION__);
 }
 
 void CXBMCApp::onStop()
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
-  // everything has been handled in onLostFocus() so wait
-  // if onDestroy() is called
+  android_printf("%s: ", __PRETTY_FUNCTION__);
 }
 
 void CXBMCApp::onDestroy()
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
-  stop();
+  android_printf("%s", __PRETTY_FUNCTION__);
+
+  // If android is forcing us to stop, ask XBMC to exit then wait until it's
+  // been destroyed.
+  if (!m_exiting)
+  {
+    XBMC_Stop();
+    pthread_join(m_thread, NULL);
+    android_printf(" => XBMC finished");
+  }
+
+  if (m_wakeLock != NULL && m_activity != NULL)
+  {
+    JNIEnv* env = xbmc_jnienv();
+    env->DeleteGlobalRef(m_wakeLock);
+    m_wakeLock = NULL;
+  }
 }
 
 void CXBMCApp::onSaveState(void **data, size_t *size)
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
+  android_printf("%s: ", __PRETTY_FUNCTION__);
   // no need to save anything as XBMC is running in its own thread
 }
 
 void CXBMCApp::onConfigurationChanged()
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
+  android_printf("%s: ", __PRETTY_FUNCTION__);
   // ignore any configuration changes like screen rotation etc
 }
 
 void CXBMCApp::onLowMemory()
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
+  android_printf("%s: ", __PRETTY_FUNCTION__);
   // can't do much as we don't want to close completely
 }
 
 void CXBMCApp::onCreateWindow(ANativeWindow* window)
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
+  android_printf("%s: ", __PRETTY_FUNCTION__);
   if (window == NULL)
   {
     android_printf(" => invalid ANativeWindow object");
     return;
   }
   m_window = window;
+  acquireWakeLock();
+  if(!m_firstrun)
+  {
+    XBMC_SetupDisplay();
+    XBMC_Pause(false);
+  }
 }
 
 void CXBMCApp::onResizeWindow()
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
+  android_printf("%s: ", __PRETTY_FUNCTION__);
   // no need to do anything because we are fixed in fullscreen landscape mode
 }
 
 void CXBMCApp::onDestroyWindow()
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
+  android_printf("%s: ", __PRETTY_FUNCTION__);
 
-  if (m_state.appState < Paused)
+  // If we have exited XBMC, it no longer exists.
+  if (!m_exiting)
   {
     XBMC_DestroyDisplay();
-    setAppState(Paused);
-    releaseWakeLock();
+    XBMC_Pause(true);
   }
+
+  releaseWakeLock();
+  m_window=NULL;
 }
 
 void CXBMCApp::onGainFocus()
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
-  // everything is handled in onActivate()
+  android_printf("%s: ", __PRETTY_FUNCTION__);
 }
 
 void CXBMCApp::onLostFocus()
 {
-  android_printf("%s: %d", __PRETTY_FUNCTION__, m_state.appState);
-  switch (m_state.appState)
-  {
-    case Initialized:
-    case Rendering:
-      XBMC_Pause(true);
-      setAppState(Unfocused);
-      break;
-
-    default:
-      break;
-  }
+  android_printf("%s: ", __PRETTY_FUNCTION__);
 }
 
 bool CXBMCApp::getWakeLock(JNIEnv *env)
@@ -282,8 +239,7 @@ void CXBMCApp::acquireWakeLock()
   if (m_activity == NULL)
     return;
 
-  JNIEnv *env = NULL;
-  AttachCurrentThread(&env);
+  JNIEnv* env = xbmc_jnienv();
 
   if (!getWakeLock(env))
   {
@@ -295,8 +251,6 @@ void CXBMCApp::acquireWakeLock()
   jmethodID midWakeLockAcquire = env->GetMethodID(cWakeLock, "acquire", "()V");
   env->CallVoidMethod(m_wakeLock, midWakeLockAcquire);
   env->DeleteLocalRef(cWakeLock);
-
-  DetachCurrentThread();
 }
 
 void CXBMCApp::releaseWakeLock()
@@ -304,9 +258,7 @@ void CXBMCApp::releaseWakeLock()
   if (m_activity == NULL)
     return;
 
-  JNIEnv *env = NULL;
-  AttachCurrentThread(&env);
-
+  JNIEnv* env = xbmc_jnienv();
   if (!getWakeLock(env))
   {
     android_printf("%s: unable to release a WakeLock");
@@ -317,75 +269,35 @@ void CXBMCApp::releaseWakeLock()
   jmethodID midWakeLockRelease = env->GetMethodID(cWakeLock, "release", "()V");
   env->CallVoidMethod(m_wakeLock, midWakeLockRelease);
   env->DeleteLocalRef(cWakeLock);
-
-  DetachCurrentThread();
 }
 
 void CXBMCApp::run()
 {
-    int status = 0;
-    setAppState(Initialized);
+  int status = 0;
 
-    android_printf(" => running XBMC_Run...");
-    try
-    {
-      setAppState(Rendering);
-      status = XBMC_Run(true);
-      android_printf(" => XBMC_Run finished with %d", status);
-    }
-    catch(...)
-    {
-      android_printf("ERROR: Exception caught on main loop. Exiting");
-      setAppState(Error);
-    }
-
-  bool finishActivity = false;
-  pthread_mutex_lock(&m_state.mutex);
-  finishActivity = m_state.appState != Stopping;
-  m_state.appState = Stopped;
-  pthread_mutex_unlock(&m_state.mutex);
-  
-  if (finishActivity)
+  android_printf(" => waiting for a window");
+  // Hack!
+  // TODO: Change EGL startup so that we can start headless, then create the
+  // window once android gives us a surface to play with.
+  while(!m_window)
+    usleep(1000);
+  m_firstrun=false;
+  android_printf(" => running XBMC_Run...");
+  try
   {
-    android_printf(" => calling ANativeActivity_finish()");
-    ANativeActivity_finish(m_activity);
+    status = XBMC_Run(true);
+    android_printf(" => XBMC_Run finished with %d", status);
   }
-}
-
-void CXBMCApp::stop()
-{
-  android_printf("%s", __PRETTY_FUNCTION__);
-
-  pthread_mutex_lock(&m_state.mutex);
-  if (m_state.appState < Stopped)
+  catch(...)
   {
-    m_state.appState = Stopping;
-    pthread_mutex_unlock(&m_state.mutex);
-    
-    android_printf(" => executing XBMC_Stop");
-    XBMC_Stop();
-    android_printf(" => waiting for XBMC to finish");
-    pthread_join(m_state.thread, NULL);
-    android_printf(" => XBMC finished");
+    android_printf("ERROR: Exception caught on main loop. Exiting");
   }
-  else
-    pthread_mutex_unlock(&m_state.mutex);
-  
-  if (m_wakeLock != NULL && m_activity != NULL)
-  {
-    JNIEnv *env = NULL;
-    m_activity->vm->AttachCurrentThread(&env, NULL);
-    
-    env->DeleteGlobalRef(m_wakeLock);
-    m_wakeLock = NULL;
-  }
-}
 
-void CXBMCApp::setAppState(AppState state)
-{
-  pthread_mutex_lock(&m_state.mutex);
-  m_state.appState = state;
-  pthread_mutex_unlock(&m_state.mutex);
+  // If we are have not been force by Android to exit, notify its finish routine.
+  // This will cause android to run through its teardown events, it calls:
+  // onPause(), onLostFocus(), onDestroyWindow(), onStop(), onDestroy().
+  ANativeActivity_finish(m_activity);
+  m_exiting=true;
 }
 
 void CXBMCApp::XBMC_Pause(bool pause)
@@ -413,24 +325,6 @@ bool CXBMCApp::XBMC_DestroyDisplay()
 {
   android_printf("XBMC_DestroyDisplay()");
   return CApplicationMessenger::Get().DestroyDisplay();
-}
-
-int CXBMCApp::AttachCurrentThread(JNIEnv** p_env, void* thr_args /* = NULL */)
-{
-  // Until a thread is attached, it has no JNIEnv, and cannot make JNI calls.
-  // The JNIEnv is used for thread-local storage. For this reason,
-  //  you cannot share a JNIEnv between threads.
-  // If a thread is attached to JNIEnv and garbage collection is in progress,
-  //  or the debugger has issued a suspend request, Android will
-  //  pause the thread the next time it makes a JNI call.
-  return m_activity->vm->AttachCurrentThread(p_env, thr_args);
-}
-
-int CXBMCApp::DetachCurrentThread()
-{
-  // Threads attached through JNIEnv must
-  // call DetachCurrentThread before they exit
-  return m_activity->vm->DetachCurrentThread();
 }
 
 int CXBMCApp::SetBuffersGeometry(int width, int height, int format)
@@ -468,8 +362,7 @@ bool CXBMCApp::ListApplications(vector<androidPackage> *applications)
   if (!m_activity)
     return false;
 
-  JNIEnv *env = NULL;
-  AttachCurrentThread(&env);
+  JNIEnv* env = xbmc_jnienv();
   jobject oActivity = m_activity->clazz;
   jclass cActivity = env->GetObjectClass(oActivity);
 
@@ -532,7 +425,6 @@ bool CXBMCApp::ListApplications(vector<androidPackage> *applications)
     applications->push_back(desc);
   }
   env->DeleteLocalRef(oPackageManager);
-  DetachCurrentThread();
   return true;
 }
 
@@ -542,8 +434,7 @@ bool CXBMCApp::GetIconSize(const string &packageName, int *width, int *height)
     return false;
 
   jthrowable exc;
-  JNIEnv *env = NULL;
-  AttachCurrentThread(&env);
+  JNIEnv* env = xbmc_jnienv();
 
   jobject oActivity = m_activity->clazz;
   jclass cActivity = env->GetObjectClass(oActivity);
@@ -579,7 +470,6 @@ bool CXBMCApp::GetIconSize(const string &packageName, int *width, int *height)
     env->ExceptionDescribe();
     env->ExceptionClear();
     env->DeleteLocalRef(oBitmap);
-    DetachCurrentThread();
     return false;
   } 
   jclass cBitmap = env->GetObjectClass(oBitmap);
@@ -597,7 +487,6 @@ bool CXBMCApp::GetIconSize(const string &packageName, int *width, int *height)
     env->ExceptionDescribe();
     env->ExceptionClear();
     env->DeleteLocalRef(oBitmap);
-    DetachCurrentThread();
     return false;
   }
   // height = oBitmap.getHeight;
@@ -610,11 +499,8 @@ bool CXBMCApp::GetIconSize(const string &packageName, int *width, int *height)
     CLog::Log(LOGERROR, "CXBMCApp::GetIconSize Error getting icon height for %s. Exception follows:", packageName.c_str());
     env->ExceptionDescribe();
     env->ExceptionClear();
-    DetachCurrentThread();
     return false;
   }
-
-  DetachCurrentThread();
   return true;
 }
 
@@ -624,8 +510,7 @@ bool CXBMCApp::GetIcon(const string &packageName, void* buffer, unsigned int buf
     return false;
 
   jthrowable exc;
-  JNIEnv *env = NULL;
-  AttachCurrentThread(&env);
+  JNIEnv* env = xbmc_jnienv();
 
   CLog::Log(LOGERROR, "CXBMCApp::GetIconSize Looking for: %s", packageName.c_str());
 
@@ -660,7 +545,6 @@ bool CXBMCApp::GetIcon(const string &packageName, void* buffer, unsigned int buf
     CLog::Log(LOGERROR, "CXBMCApp::GetIcon Error getting icon for  %s. Exception follows:", packageName.c_str());
     env->ExceptionDescribe();
     env->ExceptionClear();
-    DetachCurrentThread();
     return false;
   }
   jobject oBitmap = env->CallObjectMethod(oBitmapDrawable, mgetBitmap);
@@ -680,10 +564,8 @@ bool CXBMCApp::GetIcon(const string &packageName, void* buffer, unsigned int buf
     CLog::Log(LOGERROR, "CXBMCApp::GetIcon Error copying icon for  %s. Exception follows:", packageName.c_str());
     env->ExceptionDescribe();
     env->ExceptionClear();
-    DetachCurrentThread();
     return false;
   }
-  DetachCurrentThread();
   return true;
 }
 
@@ -693,8 +575,7 @@ bool CXBMCApp::HasLaunchIntent(const string &package)
   if (!m_activity)
     return false;
 
-  JNIEnv *env = NULL;
-  AttachCurrentThread(&env);
+  JNIEnv* env = xbmc_jnienv();
 
   jthrowable exc;
   jobject oActivity = m_activity->clazz;
@@ -730,52 +611,116 @@ bool CXBMCApp::HasLaunchIntent(const string &package)
   return true;
 }
 
-bool CXBMCApp::StartActivity(const string &package)
+// Note intent, dataType, dataURI all default to ""
+bool CXBMCApp::StartActivity(const string &package, const string &intent, const string &dataType, const string &dataURI)
 {
   if (!m_activity || !package.size())
-    return false;
+   return false;
+
+  CLog::Log(LOGDEBUG, "CXBMCApp::StartActivity package: '%s' intent: '%s' dataType: '%s' dataURI: '%s'", package.c_str(), intent.c_str(), dataType.c_str(), dataURI.c_str());
 
   jthrowable exc;
-  JNIEnv *env = NULL;
-  AttachCurrentThread(&env);
+  JNIEnv* env = xbmc_jnienv();
+
   jobject oActivity = m_activity->clazz;
   jclass cActivity = env->GetObjectClass(oActivity);
 
-  // oPackageManager = new PackageManager();
-  jmethodID mgetPackageManager = env->GetMethodID(cActivity, "getPackageManager", "()Landroid/content/pm/PackageManager;");
-  jobject oPackageManager = (jobject)env->CallObjectMethod(oActivity, mgetPackageManager);
-
-  // oPackageIntent = oPackageManager.getLaunchIntentForPackage(package);
-  jclass cPackageManager = env->GetObjectClass(oPackageManager);
-  jmethodID mgetLaunchIntentForPackage = env->GetMethodID(cPackageManager, "getLaunchIntentForPackage", "(Ljava/lang/String;)Landroid/content/Intent;");
-  jstring sPackageName = env->NewStringUTF(package.c_str());
-  jobject oPackageIntent = env->CallObjectMethod(oPackageManager, mgetLaunchIntentForPackage, sPackageName);
-  env->DeleteLocalRef(cPackageManager);
-  env->DeleteLocalRef(sPackageName);
-  env->DeleteLocalRef(oPackageManager);
-
-  exc = env->ExceptionOccurred();
-  if (exc)
+  jobject oIntent = NULL;
+  jclass cIntent = NULL;
+  if (intent.size())
   {
-    CLog::Log(LOGERROR, "CXBMCApp::StartActivity Failed to load %s. Exception follows:", package.c_str());
-    env->ExceptionDescribe();
-    env->ExceptionClear();
-    env->DeleteLocalRef(cActivity);
-    DetachCurrentThread();
-    return false;
+    // Java equivalent for following JNI
+    //    Intent oIntent = new Intent(Intent.ACTION_VIEW);
+    cIntent = env->FindClass("android/content/Intent");
+    jmethodID midIntentCtor = env->GetMethodID(cIntent, "<init>", "(Ljava/lang/String;)V");
+    jstring sIntent = env->NewStringUTF(intent.c_str());
+    oIntent = env->NewObject(cIntent, midIntentCtor, sIntent);
+    env->DeleteLocalRef(sIntent);
   }
-  if (!oPackageIntent)
+  else
   {
-    CLog::Log(LOGERROR, "CXBMCApp::StartActivity %s has no Launch Intent", package.c_str());
-    env->DeleteLocalRef(cActivity);
-    DetachCurrentThread();
-    return false;
+    // oPackageManager = new PackageManager();
+    jmethodID mgetPackageManager = env->GetMethodID(cActivity, "getPackageManager", "()Landroid/content/pm/PackageManager;");
+    jobject oPackageManager = (jobject)env->CallObjectMethod(oActivity, mgetPackageManager);
+
+    // oPackageIntent = oPackageManager.getLaunchIntentForPackage(package);
+    jclass cPackageManager = env->GetObjectClass(oPackageManager);
+    jmethodID mgetLaunchIntentForPackage = env->GetMethodID(cPackageManager, "getLaunchIntentForPackage", "(Ljava/lang/String;)Landroid/content/Intent;");
+    jstring sPackageName = env->NewStringUTF(package.c_str());
+    oIntent = env->CallObjectMethod(oPackageManager, mgetLaunchIntentForPackage, sPackageName);
+    cIntent = env->GetObjectClass(oIntent);
+    env->DeleteLocalRef(cPackageManager);
+    env->DeleteLocalRef(sPackageName);
+    env->DeleteLocalRef(oPackageManager);
+
+    exc = env->ExceptionOccurred();
+    if (exc)
+    {
+      CLog::Log(LOGERROR, "CXBMCApp::StartActivity Failed to load %s. Exception follows:", package.c_str());
+      env->ExceptionDescribe();
+      env->ExceptionClear();
+      env->DeleteLocalRef(cActivity);
+      return false;
+    }
+    if (!oIntent)
+    {
+      CLog::Log(LOGERROR, "CXBMCApp::StartActivity %s has no Launch Intent", package.c_str());
+      env->DeleteLocalRef(cActivity);
+      return false;
+    }
   }
-  // startActivity(oIntent);
+
+  jobject oUri;
+  if (dataURI.size())
+  {
+    // Java equivalent for the following JNI
+    //   Uri oUri = Uri.parse(sPath);
+    jclass cUri = env->FindClass("android/net/Uri");
+    jmethodID midUriParse = env->GetStaticMethodID(cUri, "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
+    jstring sPath = env->NewStringUTF(dataURI.c_str());
+    oUri = env->CallStaticObjectMethod(cUri, midUriParse, sPath);
+    env->DeleteLocalRef(sPath);
+    env->DeleteLocalRef(cUri);
+
+    // Run setData or setDataAndType depending on what was passed into the method
+    //   This allows opening market links or external players using the same method
+    if (dataType.size())
+    {
+      // Java equivalent for the following JNI
+      //   oIntent.setDataAndType(oUri, "video/*");
+      jmethodID midIntentSetDataAndType = env->GetMethodID(cIntent, "setDataAndType", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/content/Intent;");
+      jstring sMimeType = env->NewStringUTF(dataType.c_str());
+      oIntent = env->CallObjectMethod(oIntent, midIntentSetDataAndType, oUri, sMimeType);
+      env->DeleteLocalRef(sMimeType);
+    }
+    else 
+    {
+      // Java equivalent for the following JNI
+      //   oIntent.setData(oUri);
+      jmethodID midIntentSetData = env->GetMethodID(cIntent, "setData", "(Landroid/net/Uri;)Landroid/content/Intent;");
+      oIntent = env->CallObjectMethod(oIntent, midIntentSetData, oUri);
+    }
+  }
+  
+  // Java equivalent for the following JNI
+  //   oIntent.setPackage(sPackage);
+  jstring sPackage = env->NewStringUTF(package.c_str());
+  jmethodID mSetPackage = env->GetMethodID(cIntent, "setPackage", "(Ljava/lang/String;)Landroid/content/Intent;");
+  oIntent = env->CallObjectMethod(oIntent, mSetPackage, sPackage);
+
+  if (oUri != NULL)
+  {
+    env->DeleteLocalRef(oUri);
+  }
+  env->DeleteLocalRef(cIntent);
+  env->DeleteLocalRef(sPackage);
+ 
+  // Java equivalent for the following JNI
+  //   startActivity(oIntent);
   jmethodID mStartActivity = env->GetMethodID(cActivity, "startActivity", "(Landroid/content/Intent;)V");
-  env->CallVoidMethod(oActivity, mStartActivity, oPackageIntent);
+  env->CallVoidMethod(oActivity, mStartActivity, oIntent);
   env->DeleteLocalRef(cActivity);
-  env->DeleteLocalRef(oPackageIntent);
+  env->DeleteLocalRef(oIntent);
 
   exc = env->ExceptionOccurred();
   if (exc)
@@ -783,11 +728,8 @@ bool CXBMCApp::StartActivity(const string &package)
     CLog::Log(LOGERROR, "CXBMCApp::StartActivity Failed to load %s. Exception follows:", package.c_str());
     env->ExceptionDescribe();
     env->ExceptionClear();
-    DetachCurrentThread();
     return false;
   }
-
-  DetachCurrentThread();
   return true;
 }
 
@@ -796,8 +738,8 @@ int CXBMCApp::GetBatteryLevel()
   if (m_activity == NULL)
     return -1;
 
-  JNIEnv *env = NULL;
-  AttachCurrentThread(&env);
+  JNIEnv* env = xbmc_jnienv();
+
   jobject oActivity = m_activity->clazz;
 
   // IntentFilter oIntentFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
@@ -829,8 +771,6 @@ int CXBMCApp::GetBatteryLevel()
   env->DeleteLocalRef(oBatteryStatus);
   env->DeleteLocalRef(oIntentFilter);
 
-  DetachCurrentThread();
-
   if (iLevel <= 0 || iScale < 0)
     return iLevel;
 
@@ -842,8 +782,7 @@ bool CXBMCApp::GetExternalStorage(std::string &path, const std::string &type /* 
   if (m_activity == NULL)
     return false;
 
-  JNIEnv *env = NULL;
-  AttachCurrentThread(&env);
+  JNIEnv* env = xbmc_jnienv();
 
   // check if external storage is available
   // String sStorageState = android.os.Environment.getExternalStorageState();
@@ -904,8 +843,6 @@ bool CXBMCApp::GetExternalStorage(std::string &path, const std::string &type /* 
 
   env->DeleteLocalRef(cEnvironment);
 
-  DetachCurrentThread();
-
   return mounted && !path.empty();
 }
 
@@ -927,8 +864,7 @@ bool CXBMCApp::GetStorageUsage(const std::string &path, std::string &usage)
     return false;
   }
 
-  JNIEnv *env = NULL;
-  AttachCurrentThread(&env);
+  JNIEnv* env = xbmc_jnienv();
 
   // android.os.StatFs oStats = new android.os.StatFs(sPath);
   jclass cStatFs = env->FindClass("android/os/StatFs");
@@ -952,8 +888,6 @@ bool CXBMCApp::GetStorageUsage(const std::string &path, std::string &usage)
   env->DeleteLocalRef(oStats);
   env->DeleteLocalRef(cStatFs);
 
-  DetachCurrentThread();
-
   if (iBlockSize <= 0 || iBlocksTotal <= 0 || iBlocksFree < 0)
     return false;
   
@@ -975,3 +909,69 @@ bool CXBMCApp::GetStorageUsage(const std::string &path, std::string &usage)
   usage = fmt.str();
   return true;
 }
+
+// Used in Application.cpp to figure out volume steps
+int CXBMCApp::GetMaxSystemVolume()
+{
+  static int maxVolume = -1;
+  if (maxVolume == -1)
+  {
+    JNIEnv* env = xbmc_jnienv();
+    maxVolume = GetMaxSystemVolume(env);
+  }
+  return maxVolume;
+}
+
+int CXBMCApp::GetMaxSystemVolume(JNIEnv *env)
+{
+  jobject oActivity = m_activity->clazz;
+  jclass cActivity = env->GetObjectClass(oActivity);
+
+  // Get Audio manager
+  //  (AudioManager)getSystemService(Context.AUDIO_SERVICE)
+  jmethodID mgetSystemService = env->GetMethodID(cActivity, "getSystemService","(Ljava/lang/String;)Ljava/lang/Object;");
+  jstring sAudioService = env->NewStringUTF("audio");
+  jobject oAudioManager = env->CallObjectMethod(oActivity, mgetSystemService, sAudioService);
+  env->DeleteLocalRef(sAudioService);
+  env->DeleteLocalRef(cActivity);
+
+  // Get max volume
+  //  int max_volume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+  jclass cAudioManager = env->GetObjectClass(oAudioManager);
+  jmethodID mgetStreamMaxVolume = env->GetMethodID(cAudioManager, "getStreamMaxVolume", "(I)I");
+  jfieldID fstreamMusic = env->GetStaticFieldID(cAudioManager, "STREAM_MUSIC", "I");
+  jint stream_music = env->GetStaticIntField(cAudioManager, fstreamMusic);
+  int maxVolume = (int)env->CallObjectMethod(oAudioManager, mgetStreamMaxVolume, stream_music); // AudioManager.STREAM_MUSIC
+
+  env->DeleteLocalRef(oAudioManager);
+  env->DeleteLocalRef(cAudioManager);
+
+  return maxVolume;
+}
+
+void CXBMCApp::SetSystemVolume(JNIEnv *env, float percent)
+{
+  CLog::Log(LOGDEBUG, "CXBMCApp::SetSystemVolume: %f", percent);
+
+  jobject oActivity = m_activity->clazz;
+  jclass cActivity = env->GetObjectClass(oActivity);
+
+  // Get Audio manager
+  //  (AudioManager)getSystemService(Context.AUDIO_SERVICE)
+  jmethodID mgetSystemService = env->GetMethodID(cActivity, "getSystemService","(Ljava/lang/String;)Ljava/lang/Object;");
+  jstring sAudioService = env->NewStringUTF("audio");
+  jobject oAudioManager = env->CallObjectMethod(oActivity, mgetSystemService, sAudioService);
+  jclass cAudioManager = env->GetObjectClass(oAudioManager);
+  env->DeleteLocalRef(sAudioService);
+  env->DeleteLocalRef(cActivity);
+
+  // Set volume
+  //   mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, max_volume, 0);
+  jfieldID fstreamMusic = env->GetStaticFieldID(cAudioManager, "STREAM_MUSIC", "I");
+  jint stream_music = env->GetStaticIntField(cAudioManager, fstreamMusic);
+  jmethodID msetStreamVolume = env->GetMethodID(cAudioManager, "setStreamVolume", "(III)V");
+  env->CallObjectMethod(oAudioManager, msetStreamVolume, stream_music, int(GetMaxSystemVolume(env)*percent), 0);
+  env->DeleteLocalRef(oAudioManager);
+  env->DeleteLocalRef(cAudioManager);
+}
+

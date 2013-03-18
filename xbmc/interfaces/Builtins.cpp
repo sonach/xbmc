@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -44,7 +44,6 @@
 #include "addons/AddonManager.h"
 #include "addons/PluginSource.h"
 #include "music/LastFmManager.h"
-#include "utils/LCD.h"
 #include "utils/log.h"
 #include "storage/MediaManager.h"
 #include "utils/RssReader.h"
@@ -208,14 +207,13 @@ const BUILT_IN commands[] = {
   { "LIRC.Start",                 false,  "Adds XBMC as LIRC client" },
   { "LIRC.Send",                  true,   "Sends a command to LIRC" },
 #endif
-#ifdef HAS_LCD
-  { "LCD.Suspend",                false,  "Suspends LCDproc" },
-  { "LCD.Resume",                 false,  "Resumes LCDproc" },
-#endif
   { "VideoLibrary.Search",        false,  "Brings up a search dialog which will search the library" },
   { "ToggleDebug",                false,  "Enables/disables debug mode" },
   { "StartPVRManager",            false,  "(Re)Starts the PVR manager" },
   { "StopPVRManager",             false,  "Stops the PVR manager" },
+#if defined(TARGET_ANDROID)
+  { "StartAndroidActivity",       true,   "Launch an Android native app with the given package name.  Optional parms (in order): intent, dataType, dataURI." },
+#endif
 };
 
 bool CBuiltins::HasCommand(const CStdString& execString)
@@ -569,6 +567,7 @@ int CBuiltins::Execute(const CStdString& execString)
 
     // ask if we need to check guisettings to resume
     bool askToResume = true;
+    int playOffset = 0;
     for (unsigned int i = 1 ; i < params.size() ; i++)
     {
       if (params[i].Equals("isdir"))
@@ -586,8 +585,10 @@ int CBuiltins::Execute(const CStdString& execString)
         // force the item to start at the beginning (m_lStartOffset is initialized to 0)
         askToResume = false;
       }
-      else if (params[i].Left(11).Equals("playoffset="))
-        item.SetProperty("playlist_starting_track", atoi(params[i].Mid(11)) - 1);
+      else if (params[i].Left(11).Equals("playoffset=")) {
+        playOffset = atoi(params[i].Mid(11)) - 1;
+        item.SetProperty("playlist_starting_track", playOffset);
+      }
     }
 
     if (!item.m_bIsFolder && item.IsPlugin())
@@ -614,7 +615,7 @@ int CBuiltins::Execute(const CStdString& execString)
       g_playlistPlayer.ClearPlaylist(playlist);
       g_playlistPlayer.Add(playlist, items);
       g_playlistPlayer.SetCurrentPlaylist(playlist);
-      g_playlistPlayer.Play();
+      g_playlistPlayer.Play(playOffset);
     }
     else
     {
@@ -876,7 +877,7 @@ int CBuiltins::Execute(const CStdString& execString)
   }
   else if (execute.Equals("playwith"))
   {
-    g_application.m_eForcedNextPlayer = CPlayerCoreFactory::GetPlayerCore(parameter);
+    g_application.m_eForcedNextPlayer = CPlayerCoreFactory::Get().GetPlayerCore(parameter);
     g_application.OnAction(CAction(ACTION_PLAYER_PLAY));
   }
   else if (execute.Equals("mute"))
@@ -886,10 +887,10 @@ int CBuiltins::Execute(const CStdString& execString)
   else if (execute.Equals("setvolume"))
   {
     int oldVolume = g_application.GetVolume();
-    int volume = atoi(parameter.c_str());
+    float volume = (float)strtod(parameter.c_str(), NULL);
 
-    g_application.SetVolume((float)volume);
-    if(oldVolume != volume)
+    g_application.SetVolume(volume);
+    if(oldVolume != (int)volume)
     {
       if(params.size() > 1 && params[1].Equals("showVolumeBar"))    
       {
@@ -985,7 +986,9 @@ int CBuiltins::Execute(const CStdString& execString)
 
     if( g_alarmClock.IsRunning() )
       g_alarmClock.Stop(params[0],silent);
-
+    // no negative times not allowed, loop must have a positive time
+    if (seconds < 0 || (seconds == 0 && loop))
+      return false;
     g_alarmClock.Start(params[0], seconds, params[1], silent, loop);
   }
   else if (execute.Equals("notification"))
@@ -1584,16 +1587,6 @@ int CBuiltins::Execute(const CStdString& execString)
     g_RemoteControl.AddSendCommand(command);
   }
 #endif
-#ifdef HAS_LCD
-  else if (execute.Equals("lcd.suspend"))
-  {
-    g_lcd->Suspend();
-  }
-  else if (execute.Equals("lcd.resume"))
-  {
-    g_lcd->Resume();
-  }
-#endif
   else if (execute.Equals("weather.locationset"))
   {
     int loc = atoi(params[0]);
@@ -1633,6 +1626,10 @@ int CBuiltins::Execute(const CStdString& execString)
   else if (execute.Equals("stoppvrmanager"))
   {
     g_application.StopPVRManager();
+  }
+  else if (execute.Equals("StartAndroidActivity") && params.size() > 0)
+  {
+    CApplicationMessenger::Get().StartAndroidActivity(params);
   }
   else
     return -1;

@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -27,6 +27,7 @@
 #include "utils/MathUtils.h"
 #include "utils/log.h"
 #include "windowing/WindowingFactory.h"
+#include "settings/GUISettings.h"
 
 #include <math.h>
 
@@ -423,7 +424,16 @@ float CGUIFontTTFBase::GetTextWidthInternal(vecText::const_iterator start, vecTe
   while (start != end)
   {
     Character *c = GetCharacter(*start++);
-    if (c) width += c->advance;
+    if (c)
+    {
+      // If last character in line, we want to add render width
+      // and not advance distance - this makes sure that italic text isn't
+      // choped on the end (as render width is larger than advance then).
+      if (start == end)
+        width += max(c->right - c->left + c->offsetX, c->advance);
+      else
+        width += c->advance;
+    }
   }
   return width;
 }
@@ -726,12 +736,24 @@ void CGUIFontTTFBase::RenderCharacter(float posX, float posY, const Character *c
   m_color = color;
   SVertex* v = m_vertex + m_vertex_count;
 
+  unsigned char r = GET_R(color)
+              , g = GET_G(color)
+              , b = GET_B(color)
+              , a = GET_A(color);
+
+  if(g_Windowing.UseLimitedColor())
+  {
+    r = (235 - 16) * r / 255;
+    g = (235 - 16) * g / 255;
+    b = (235 - 16) * b / 255;
+  }
+
   for(int i = 0; i < 4; i++)
   {
-    v[i].r = GET_R(color);
-    v[i].g = GET_G(color);
-    v[i].b = GET_B(color);
-    v[i].a = GET_A(color);
+    v[i].r = r;
+    v[i].g = g;
+    v[i].b = b;
+    v[i].a = a;
   }
 
 #if defined(HAS_GL) || defined(HAS_DX)

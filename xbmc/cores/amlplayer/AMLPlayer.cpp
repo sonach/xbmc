@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2011-2012 Team XBMC
+ *      Copyright (C) 2011-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -27,6 +27,7 @@
 #include "GUIInfoManager.h"
 #include "video/VideoThumbLoader.h"
 #include "Util.h"
+#include "cores/AudioEngine/Utils/AEUtil.h"
 #include "cores/VideoRenderers/RenderFlags.h"
 #include "cores/VideoRenderers/RenderFormats.h"
 #include "cores/VideoRenderers/RenderManager.h"
@@ -777,14 +778,36 @@ float CAMLPlayer::GetPercentage()
     return 0.0f;
 }
 
-void CAMLPlayer::SetVolume(float volume)
+void CAMLPlayer::SetMute(bool bOnOff)
 {
-  CLog::Log(LOGDEBUG, "CAMLPlayer::SetVolume(%f)", volume);
+  m_audio_mute = bOnOff;
 #if !defined(TARGET_ANDROID)
   CSingleLock lock(m_aml_csection);
-  // volume is a float percent from 0.0 to 1.0
   if (m_dll->check_pid_valid(m_pid))
-    m_dll->audio_set_volume(m_pid, volume);
+  {
+    if (m_audio_mute)
+      m_dll->audio_set_volume(m_pid, 0.0);
+    else
+      m_dll->audio_set_volume(m_pid, m_audio_volume);
+  }
+#endif
+}
+
+void CAMLPlayer::SetVolume(float volume)
+{
+  m_audio_volume = 0.0f;
+  if (volume > VOLUME_MINIMUM)
+  {
+    float dB = CAEUtil::PercentToGain(volume);
+    m_audio_volume = CAEUtil::GainToScale(dB);
+  }
+  if (m_audio_volume >= 0.99f)
+    m_audio_volume = 1.0f;
+
+#if !defined(TARGET_ANDROID)
+  CSingleLock lock(m_aml_csection);
+  if (!m_audio_mute && m_dll->check_pid_valid(m_pid))
+    m_dll->audio_set_volume(m_pid, m_audio_volume);
 #endif
 }
 
@@ -821,25 +844,6 @@ int CAMLPlayer::GetAudioStream()
 {
   //CLog::Log(LOGDEBUG, "CAMLPlayer::GetAudioStream");
   return m_audio_index;
-}
-
-void CAMLPlayer::GetAudioStreamName(int iStream, CStdString &strStreamName)
-{
-  //CLog::Log(LOGDEBUG, "CAMLPlayer::GetAudioStreamName");
-  CSingleLock lock(m_aml_csection);
-
-  strStreamName.Format("Undefined");
-
-  if (iStream > (int)m_audio_streams.size() || iStream < 0)
-    return;
-
-  if ( m_audio_streams[iStream]->language.size())
-  {
-    CStdString name;
-    g_LangCodeExpander.Lookup( name, m_audio_streams[iStream]->language);
-    strStreamName = name;
-  }
-
 }
 
 void CAMLPlayer::SetAudioStream(int SetAudioStream)
@@ -903,35 +907,33 @@ int CAMLPlayer::GetSubtitle()
     return -1;
 }
 
-void CAMLPlayer::GetSubtitleName(int iStream, CStdString &strStreamName)
+void CAMLPlayer::GetSubtitleStreamInfo(int index, SPlayerSubtitleStreamInfo &info)
 {
   CSingleLock lock(m_aml_csection);
 
-  strStreamName = "";
-
-  if (iStream > (int)m_subtitle_streams.size() || iStream < 0)
+  if (index > (int)m_subtitle_streams.size() -1 || index < 0)
     return;
 
   if (m_subtitle_streams[m_subtitle_index]->source == STREAM_SOURCE_NONE)
   {
-    if ( m_subtitle_streams[iStream]->language.size())
+    if ( m_subtitle_streams[index]->language.size())
     {
       CStdString name;
-      g_LangCodeExpander.Lookup(name, m_subtitle_streams[iStream]->language);
-      strStreamName = name;
+      g_LangCodeExpander.Lookup(name, m_subtitle_streams[index]->language);
+      info.name = name;
     }
     else
-      strStreamName = g_localizeStrings.Get(13205); // Unknown
+      info.name = g_localizeStrings.Get(13205); // Unknown
   }
   else
   {
     if(m_subtitle_streams[m_subtitle_index]->name.length() > 0)
-      strStreamName = m_subtitle_streams[m_subtitle_index]->name;
+      info.name = m_subtitle_streams[m_subtitle_index]->name;
     else
-      strStreamName = g_localizeStrings.Get(13205); // Unknown
+      info.name = g_localizeStrings.Get(13205); // Unknown
   }
   if (m_log_level > 5)
-    CLog::Log(LOGDEBUG, "CAMLPlayer::GetSubtitleName, iStream(%d)", iStream);
+    CLog::Log(LOGDEBUG, "CAMLPlayer::GetSubtitleName, iStream(%d)", index);
 }
  
 void CAMLPlayer::SetSubtitle(int iStream)
@@ -991,16 +993,6 @@ int CAMLPlayer::AddSubtitle(const CStdString& strSubPath)
 void CAMLPlayer::Update(bool bPauseDrawing)
 {
   g_renderManager.Update(bPauseDrawing);
-}
-
-void CAMLPlayer::GetVideoRect(CRect& SrcRect, CRect& DestRect)
-{
-  g_renderManager.GetVideoRect(SrcRect, DestRect);
-}
-
-void CAMLPlayer::GetVideoAspectRatio(float &fAR)
-{
-  fAR = g_renderManager.GetAspectRatio();
 }
 
 int CAMLPlayer::GetChapterCount()
@@ -1090,6 +1082,8 @@ void CAMLPlayer::SeekTime(__int64 seek_ms)
     m_dll->player_timesearch(m_pid, (float)seek_ms/1000.0);
     WaitForSearchOK(5000);
     WaitForPlaying(5000);
+    // restore system volume setting.
+    SetVolume(m_audio_volume);
   }
 }
 
@@ -1103,37 +1097,47 @@ __int64 CAMLPlayer::GetTotalTime()
   return m_duration_ms;
 }
 
-int CAMLPlayer::GetAudioBitrate()
+void CAMLPlayer::GetAudioStreamInfo(int index, SPlayerAudioStreamInfo &info)
 {
   CSingleLock lock(m_aml_csection);
-  if (m_audio_streams.size() == 0 || m_audio_index > (int)(m_audio_streams.size() - 1))
-    return 0;
+  if (index < 0 || m_audio_streams.size() == 0 || index > (int)(m_audio_streams.size() - 1))
+    return;
 
-  return m_audio_streams[m_audio_index]->bit_rate;
+  info.bitrate = m_audio_streams[index]->bit_rate;
+
+  if ( m_audio_streams[index]->language.size())
+    info.language = m_audio_streams[index]->language;
+
+  info.channels = m_audio_streams[index]->channel;
+
+  info.audioCodecName = AudioCodecName(m_audio_streams[index]->format);
+
+  info.name.Format("Undefined");
+    
+  if ( m_audio_streams[index]->language.size())
+  {
+    CStdString name;
+    g_LangCodeExpander.Lookup( name, m_audio_streams[index]->language);
+    info.name = name;
+  }
 }
 
-int CAMLPlayer::GetVideoBitrate()
+void CAMLPlayer::GetVideoStreamInfo(SPlayerVideoStreamInfo &info)
 {
   CSingleLock lock(m_aml_csection);
   if (m_video_streams.size() == 0 || m_video_index > (int)(m_video_streams.size() - 1))
-    return 0;
+    return;
 
-  return m_video_streams[m_video_index]->bit_rate;
+  info.bitrate = m_video_streams[m_video_index]->bit_rate;
+  info.videoCodecName = VideoCodecName(m_video_streams[m_video_index]->format);
+  info.videoAspectRatio = g_renderManager.GetAspectRatio();
+  g_renderManager.GetVideoRect(info.SrcRect, info.DestRect);
 }
 
 int CAMLPlayer::GetSourceBitrate()
 {
   CLog::Log(LOGDEBUG, "CAMLPlayer::GetSourceBitrate");
   return 0;
-}
-
-int CAMLPlayer::GetChannels()
-{
-  CSingleLock lock(m_aml_csection);
-  if (m_audio_streams.size() == 0 || m_audio_index > (int)(m_audio_streams.size() - 1))
-    return 0;
-  
-  return m_audio_streams[m_audio_index]->channel;
 }
 
 int CAMLPlayer::GetBitsPerSample()
@@ -1149,28 +1153,6 @@ int CAMLPlayer::GetSampleRate()
     return 0;
   
   return m_audio_streams[m_audio_index]->sample_rate;
-}
-
-CStdString CAMLPlayer::GetAudioCodecName()
-{
-  CStdString strAudioCodec = "";
-  if (m_audio_streams.size() == 0 || m_audio_index > (int)(m_audio_streams.size() - 1))
-    return strAudioCodec;
-
-  strAudioCodec = AudioCodecName(m_audio_streams[m_audio_index]->format);
-
-  return strAudioCodec;
-}
-
-CStdString CAMLPlayer::GetVideoCodecName()
-{
-  CStdString strVideoCodec = "";
-  if (m_video_streams.size() == 0 || m_video_index > (int)(m_video_streams.size() - 1))
-    return strVideoCodec;
-  
-  strVideoCodec = VideoCodecName(m_video_streams[m_video_index]->format);
-
-  return strVideoCodec;
 }
 
 int CAMLPlayer::GetPictureWidth()
@@ -1282,9 +1264,7 @@ void CAMLPlayer::Process()
   CLog::Log(LOGNOTICE, "CAMLPlayer::Process");
   try
   {
-    CJobManager::GetInstance().Pause(kJobTypeMediaFlags);
-
-    if (CJobManager::GetInstance().IsProcessing(kJobTypeMediaFlags) > 0)
+    if (CJobManager::GetInstance().IsProcessing(CJob::PRIORITY_LOW))
     {
       if (!WaitForPausedThumbJobs(20000))
       {
@@ -1440,6 +1420,9 @@ void CAMLPlayer::Process()
       // get our initial status.
       GetStatus();
 
+      // restore mute setting.
+      SetMute(g_settings.m_bMute);
+
       // restore system volume setting.
       SetVolume(g_settings.m_fVolumeLevel);
 
@@ -1587,8 +1570,6 @@ void CAMLPlayer::Process()
 
   // reset ac3/dts passthough
   SetAudioPassThrough(AFORMAT_UNKNOWN);
-  // let thumbgen jobs resume.
-  CJobManager::GetInstance().UnPause(kJobTypeMediaFlags);
 
   if (m_log_level > 5)
     CLog::Log(LOGDEBUG, "CAMLPlayer::Process exit");
@@ -1694,7 +1675,7 @@ bool CAMLPlayer::WaitForPausedThumbJobs(int timeout_ms)
   // use m_bStop and Sleep so we can get canceled.
   while (!m_bStop && (timeout_ms > 0))
   {
-    if (CJobManager::GetInstance().IsProcessing(kJobTypeMediaFlags) > 0)
+    if (CJobManager::GetInstance().IsProcessing(CJob::PRIORITY_LOW))
     {
       Sleep(100);
       timeout_ms -= 100;
@@ -1815,8 +1796,15 @@ bool CAMLPlayer::WaitForSearchOK(int timeout_ms)
 
 bool CAMLPlayer::WaitForPlaying(int timeout_ms)
 {
+  // force the volume off in case we are starting muted
+  m_audio_mute = true;
   while (!m_bAbortRequest && (timeout_ms > 0))
   {
+#if !defined(TARGET_ANDROID)
+    // anoying that we have to hammer audio_set_volume
+    // but have to catch it before any audio comes out.
+    m_dll->audio_set_volume(m_pid, 0.0);
+#endif
     player_status pstatus = (player_status)GetPlayerSerializedState();
     if (m_log_level > 5)
       CLog::Log(LOGDEBUG, "CAMLPlayer::WaitForPlaying: %s", m_dll->player_status2str(pstatus));

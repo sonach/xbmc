@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -22,9 +22,9 @@
 #include "Application.h"
 #include "ApplicationMessenger.h"
 #include "GUIWindowLoginScreen.h"
-#include "settings/GUIWindowSettingsProfile.h"
+#include "settings/windows/GUIWindowSettingsProfile.h"
 #include "dialogs/GUIDialogContextMenu.h"
-#include "settings/GUIDialogProfileSettings.h"
+#include "settings/dialogs/GUIDialogProfileSettings.h"
 #include "GUIPassword.h"
 #ifdef HAS_PYTHON
 #include "interfaces/python/XBPython.h"
@@ -71,7 +71,6 @@ bool CGUIWindowLoginScreen::OnMessage(CGUIMessage& message)
   {
   case GUI_MSG_WINDOW_DEINIT:
     {
-      m_viewControl.Reset();
       m_vecItems->Clear();
     }
     break;
@@ -183,6 +182,12 @@ void CGUIWindowLoginScreen::OnWindowLoaded()
   m_viewControl.Reset();
   m_viewControl.SetParentWindow(GetID());
   m_viewControl.AddView(GetControl(CONTROL_BIG_LIST));
+}
+
+void CGUIWindowLoginScreen::OnWindowUnload()
+{
+  CGUIWindow::OnWindowUnload();
+  m_viewControl.Reset();
 }
 
 void CGUIWindowLoginScreen::Update()

@@ -1,5 +1,5 @@
  /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -37,6 +37,8 @@ namespace XBMCAddon
 {
   namespace xbmcgui
   {
+    XbmcThreads::ThreadLocal<ref> InterceptorBase::upcallTls;
+
     /**
      * Used in add/remove control. It only locks if it's given a 
      * non-NULL CCriticalSection. It's given a NULL CCriticalSection

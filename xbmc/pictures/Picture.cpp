@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -28,12 +28,11 @@
 #include "settings/GUISettings.h"
 #include "FileItem.h"
 #include "filesystem/File.h"
-#include "DllImageLib.h"
 #include "utils/log.h"
 #include "utils/URIUtils.h"
 #include "DllSwScale.h"
-#include "guilib/JpegIO.h"
 #include "guilib/Texture.h"
+#include "guilib/imagefactory.h"
 #if defined(HAS_OMXPLAYER)
 #include "cores/omxplayer/OMXImage.h"
 #endif
@@ -54,13 +53,30 @@ bool CPicture::CreateThumbnailFromSurface(const unsigned char *buffer, int width
     }
     delete omxImage;
 #endif
-    CJpegIO jpegImage;
-    if (jpegImage.CreateThumbnailFromSurface((BYTE *)buffer, width, height, XB_FMT_A8R8G8B8, stride, thumbFile.c_str()))
-      return true;
   }
-  DllImageLib dll;
-  if (!buffer || !dll.Load()) return false;
-  return dll.CreateThumbnailFromSurface((BYTE *)buffer, width, height, stride, thumbFile.c_str());
+
+  unsigned char *thumb = NULL;
+  unsigned int thumbsize=0;
+  IImage* pImage = ImageFactory::CreateLoader(thumbFile);
+  if(pImage == NULL || !pImage->CreateThumbnailFromSurface((BYTE *)buffer, width, height, XB_FMT_A8R8G8B8, stride, thumbFile.c_str(), thumb, thumbsize))
+  {
+    CLog::Log(LOGERROR, "Failed to CreateThumbnailFromSurface for %s", thumbFile.c_str());
+    delete pImage;
+    return false;
+  }
+
+  XFILE::CFile file;
+  if (file.OpenForWrite(thumbFile, true))
+  {
+    file.Write(thumb, thumbsize);
+    file.Close();
+    pImage->ReleaseThumbnailBuffer();
+    delete pImage;
+    return true;
+  }
+  pImage->ReleaseThumbnailBuffer();
+  delete pImage;
+  return false;
 }
 
 CThumbnailWriter::CThumbnailWriter(unsigned char* buffer, int width, int height, int stride, const CStdString& thumbFile)
@@ -242,7 +258,7 @@ bool CPicture::ScaleImage(uint8_t *in_pixels, unsigned int in_width, unsigned in
 bool CPicture::OrientateImage(uint32_t *&pixels, unsigned int &width, unsigned int &height, int orientation)
 {
   // ideas for speeding these functions up: http://cgit.freedesktop.org/pixman/tree/pixman/pixman-fast-path.c
-  uint32_t *out = NULL;
+  bool out = false;
   switch (orientation)
   {
     case 1:
@@ -270,16 +286,10 @@ bool CPicture::OrientateImage(uint32_t *&pixels, unsigned int &width, unsigned i
       CLog::Log(LOGERROR, "Unknown orientation %i", orientation);
       break;
   }
-  if (out)
-  {
-    pixels = out;
-    std::swap(width, height);
-    return true;
-  }
-  return false;
+  return out;
 }
 
-uint32_t *CPicture::FlipHorizontal(uint32_t *pixels, unsigned int width, unsigned int height)
+bool CPicture::FlipHorizontal(uint32_t *&pixels, unsigned int &width, unsigned int &height)
 {
   // this can be done in-place easily enough
   for (unsigned int y = 0; y < height; ++y)
@@ -288,10 +298,10 @@ uint32_t *CPicture::FlipHorizontal(uint32_t *pixels, unsigned int width, unsigne
     for (unsigned int x = 0; x < width / 2; ++x)
       std::swap(line[x], line[width - 1 - x]);
   }
-  return NULL;
+  return true;
 }
 
-uint32_t *CPicture::FlipVertical(uint32_t *pixels, unsigned int width, unsigned int height)
+bool CPicture::FlipVertical(uint32_t *&pixels, unsigned int &width, unsigned int &height)
 {
   // this can be done in-place easily enough
   for (unsigned int y = 0; y < height / 2; ++y)
@@ -301,10 +311,10 @@ uint32_t *CPicture::FlipVertical(uint32_t *pixels, unsigned int width, unsigned 
     for (unsigned int x = 0; x < width; ++x)
       std::swap(*line1++, *line2++);
   }
-  return NULL;
+  return true;
 }
 
-uint32_t *CPicture::Rotate180CCW(uint32_t *pixels, unsigned int width, unsigned int height)
+bool CPicture::Rotate180CCW(uint32_t *&pixels, unsigned int &width, unsigned int &height)
 {
   // this can be done in-place easily enough
   for (unsigned int y = 0; y < height / 2; ++y)
@@ -320,10 +330,10 @@ uint32_t *CPicture::Rotate180CCW(uint32_t *pixels, unsigned int width, unsigned 
     for (unsigned int x = 0; x < width / 2; ++x)
       std::swap(line[x], line[width - 1 - x]);
   }
-  return NULL;
+  return true;
 }
 
-uint32_t *CPicture::Rotate90CCW(uint32_t *pixels, unsigned int width, unsigned int height)
+bool CPicture::Rotate90CCW(uint32_t *&pixels, unsigned int &width, unsigned int &height)
 {
   uint32_t *dest = new uint32_t[width * height * 4];
   if (dest)
@@ -339,16 +349,19 @@ uint32_t *CPicture::Rotate90CCW(uint32_t *pixels, unsigned int width, unsigned i
         src += width;
       }
     }
+    delete[] pixels;
+    pixels = dest;
+    std::swap(width, height);
+    return true;
   }
-  delete[] pixels;
-  return dest;
+  return false;
 }
 
-uint32_t *CPicture::Rotate270CCW(uint32_t *pixels, unsigned int width, unsigned int height)
+bool CPicture::Rotate270CCW(uint32_t *&pixels, unsigned int &width, unsigned int &height)
 {
   uint32_t *dest = new uint32_t[width * height * 4];
   if (!dest)
-    return NULL;
+    return false;
 
   unsigned int d_height = width, d_width = height;
   for (unsigned int y = 0; y < d_height; y++)
@@ -363,14 +376,16 @@ uint32_t *CPicture::Rotate270CCW(uint32_t *pixels, unsigned int width, unsigned 
   }
 
   delete[] pixels;
-  return dest;
+  pixels = dest;
+  std::swap(width, height);
+  return true;
 }
 
-uint32_t *CPicture::Transpose(uint32_t *pixels, unsigned int width, unsigned int height)
+bool CPicture::Transpose(uint32_t *&pixels, unsigned int &width, unsigned int &height)
 {
   uint32_t *dest = new uint32_t[width * height * 4];
   if (!dest)
-    return NULL;
+    return false;
 
   unsigned int d_height = width, d_width = height;
   for (unsigned int y = 0; y < d_height; y++)
@@ -385,14 +400,16 @@ uint32_t *CPicture::Transpose(uint32_t *pixels, unsigned int width, unsigned int
   }
 
   delete[] pixels;
-  return dest;
+  pixels = dest;
+  std::swap(width, height);
+  return true;
 }
 
-uint32_t *CPicture::TransposeOffAxis(uint32_t *pixels, unsigned int width, unsigned int height)
+bool CPicture::TransposeOffAxis(uint32_t *&pixels, unsigned int &width, unsigned int &height)
 {
   uint32_t *dest = new uint32_t[width * height * 4];
   if (!dest)
-    return NULL;
+    return false;
 
   unsigned int d_height = width, d_width = height;
   for (unsigned int y = 0; y < d_height; y++)
@@ -407,5 +424,7 @@ uint32_t *CPicture::TransposeOffAxis(uint32_t *pixels, unsigned int width, unsig
   }
 
   delete[] pixels;
-  return dest;
+  pixels = dest;
+  std::swap(width, height);
+  return true;
 }

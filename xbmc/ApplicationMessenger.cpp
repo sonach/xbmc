@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -65,6 +65,9 @@
 #include "windows/GUIWindowLoginScreen.h"
 
 #include "utils/GlobalsHandling.h"
+#if defined(TARGET_ANDROID)
+  #include "xbmc/android/activity/XBMCApp.h"
+#endif
 
 using namespace PVR;
 using namespace std;
@@ -468,9 +471,19 @@ void CApplicationMessenger::ProcessMessage(ThreadMessage *pMsg)
     case TMSG_MEDIA_STOP:
       {
         // restore to previous window if needed
-        if (g_windowManager.GetActiveWindow() == WINDOW_SLIDESHOW ||
-            g_windowManager.GetActiveWindow() == WINDOW_FULLSCREEN_VIDEO ||
-            g_windowManager.GetActiveWindow() == WINDOW_VISUALISATION)
+        bool stopSlideshow = true;
+        bool stopVideo = true;
+        bool stopMusic = true;
+        if (pMsg->dwParam1 >= PLAYLIST_MUSIC && pMsg->dwParam1 <= PLAYLIST_PICTURE)
+        {
+          stopSlideshow = (pMsg->dwParam1 == PLAYLIST_PICTURE);
+          stopVideo = (pMsg->dwParam1 == PLAYLIST_VIDEO);
+          stopMusic = (pMsg->dwParam1 == PLAYLIST_MUSIC);
+        }
+
+        if ((stopSlideshow && g_windowManager.GetActiveWindow() == WINDOW_SLIDESHOW) ||
+            (stopVideo && g_windowManager.GetActiveWindow() == WINDOW_FULLSCREEN_VIDEO) ||
+            (stopMusic && g_windowManager.GetActiveWindow() == WINDOW_VISUALISATION))
           g_windowManager.PreviousWindow();
 
         g_application.ResetScreenSaver();
@@ -795,6 +808,19 @@ void CApplicationMessenger::ProcessMessage(ThreadMessage *pMsg)
       CGUIWindowLoginScreen::LoadProfile(pMsg->dwParam1);
       break;
     }
+    case TMSG_START_ANDROID_ACTIVITY:
+    {
+#if defined(TARGET_ANDROID)
+      if (pMsg->params.size())
+      {
+        CXBMCApp::StartActivity(pMsg->params[0],
+                                pMsg->params.size() > 1 ? pMsg->params[1] : "",
+                                pMsg->params.size() > 2 ? pMsg->params[2] : "",
+                                pMsg->params.size() > 3 ? pMsg->params[3] : "");
+      }
+#endif
+      break;
+    }
   }
 }
 
@@ -890,9 +916,10 @@ void CApplicationMessenger::PlayFile(const CFileItem &item, bool bRestart /*= fa
   SendMessage(tMsg, false);
 }
 
-void CApplicationMessenger::MediaStop(bool bWait /* = true */)
+void CApplicationMessenger::MediaStop(bool bWait /* = true */, int playlistid /* = -1 */)
 {
   ThreadMessage tMsg = {TMSG_MEDIA_STOP};
+  tMsg.dwParam1 = playlistid;
   SendMessage(tMsg, bWait);
 }
 
@@ -1277,5 +1304,12 @@ void CApplicationMessenger::LoadProfile(unsigned int idx)
 {
   ThreadMessage tMsg = {TMSG_LOADPROFILE};
   tMsg.dwParam1 = idx;
+  SendMessage(tMsg, false);
+}
+
+void CApplicationMessenger::StartAndroidActivity(const vector<CStdString> &params)
+{
+  ThreadMessage tMsg = {TMSG_START_ANDROID_ACTIVITY};
+  tMsg.params = params;
   SendMessage(tMsg, false);
 }

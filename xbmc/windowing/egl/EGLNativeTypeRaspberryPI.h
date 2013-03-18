@@ -1,7 +1,7 @@
 #pragma once
 
 /*
- *      Copyright (C) 2011-2012 Team XBMC
+ *      Copyright (C) 2011-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -61,7 +61,6 @@ private:
   TV_GET_STATE_RESP_T           m_tv_state;
   sem_t                         m_tv_synced;
   bool                          m_fixedMode;
-  std::vector<RESOLUTION_INFO>  m_res;
   RESOLUTION_INFO               m_desktopRes;
   int                           m_width;
   int                           m_height;
@@ -73,5 +72,7 @@ private:
 
   void DestroyDispmaxWindow();
   bool ClampToGUIDisplayLimits(int &width, int &height);
+  int FindMatchingResolution(const RESOLUTION_INFO &res, const std::vector<RESOLUTION_INFO> &resolutions);
+  int AddUniqueResolution(const RESOLUTION_INFO &res, std::vector<RESOLUTION_INFO> &resolutions);
 #endif
 };
