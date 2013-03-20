@@ -256,8 +256,9 @@ public class Splash extends Activity {
 			}
 
 		mState = State.Checking;
-
-		boolean ret = ParseCpuFeature();
+		
+		//zhanghui: don't check cpu feature
+		/*boolean ret = ParseCpuFeature();
 		if (!ret) {
 			mErrorMsg = "Error! Cannot parse CPU features.";
 			mState = State.InError;
@@ -267,7 +268,7 @@ public class Splash extends Activity {
 				mErrorMsg = "This XBMC package is not compatible with your device.\nPlease check the <a href=\"http://wiki.xbmc.org/index.php?title=XBMC_for_Android_specific_FAQ\">XBMC Android wiki</a> for more information.";
 				mState = State.InError;
 			}
-		}
+		}*/
 		if (mState != State.InError) {
 			sPackagePath = getPackageResourcePath();
 			fPackagePath = new File(sPackagePath);
