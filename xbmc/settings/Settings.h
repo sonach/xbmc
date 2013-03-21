@@ -28,9 +28,9 @@
 #endif
 
 #if defined(HAS_SKIN_TOUCHED) && defined(TARGET_DARWIN_IOS) && !defined(TARGET_DARWIN_IOS_ATV2)
-#define DEFAULT_SKIN          "skin.touched"
+#define DEFAULT_SKIN          "skin.xeebo"
 #else
-#define DEFAULT_SKIN          "skin.confluence"
+#define DEFAULT_SKIN          "skin.xeebo"
 #endif
 #define DEFAULT_WEB_INTERFACE "webinterface.default"
 #ifdef MID
