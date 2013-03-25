@@ -819,11 +819,7 @@ int CHISPlayer::HISPlayerEventCallback(HI_HANDLE hPlayer,HI_SVR_PLAYER_EVENT_S *
 {
   CHISPlayer *hisplayer = dynamic_cast<CHISPlayer*>(g_application.m_pPlayer);
   if(hisplayer){
-    //CSingleLock lock(hisplayer->m_hisevent_csection);
-	//hisplayer->m_player_event->eEvent = pstruEvent->eEvent;
-    //hisplayer->m_player_event->pu8Data = (HI_U8*)malloc(pstruEvent->u32Len);
-    //memcpy(m_player_event, pstruEvent->pu8Data, pstruEvent->u32Len);
-    //hisplayer->m_player_event->u32Len = pstruEvent->u32Len;
+    
   }
 
   return 0;
