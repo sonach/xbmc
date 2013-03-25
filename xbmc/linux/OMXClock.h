@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -115,7 +115,7 @@ public:
   bool OMXStart(bool lock = true);
   bool OMXReset(bool lock = true);
   double OMXWallTime(bool lock = true);
-  double OMXMediaTime(bool lock = true);
+  double OMXMediaTime(bool fixPreroll = true, bool lock = true);
   bool OMXPause(bool lock = true);
   bool OMXResume(bool lock = true);
   bool OMXUpdateClock(double pts, bool lock = true);

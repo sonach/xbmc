@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2011-2012 Team XBMC
+ *      Copyright (C) 2011-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -24,6 +24,7 @@
 #include "WinSystemEGL.h"
 #include "filesystem/SpecialProtocol.h"
 #include "settings/Settings.h"
+#include "settings/GUISettings.h"
 #include "utils/log.h"
 #include "EGLWrapper.h"
 #include "EGLQuirks.h"
@@ -42,7 +43,7 @@ CWinSystemEGL::CWinSystemEGL() : CWinSystemBase()
   m_config            = NULL;
 
   m_egl               = NULL;
-  m_iVSyncMode        = false;
+  m_iVSyncMode        = 0;
 }
 
 CWinSystemEGL::~CWinSystemEGL()
@@ -383,9 +384,12 @@ bool CWinSystemEGL::PresentRenderImpl(const CDirtyRegionList &dirty)
 
 void CWinSystemEGL::SetVSyncImpl(bool enable)
 {
-  m_iVSyncMode = enable;
-  if (!m_egl->SetVSync(m_display, m_iVSyncMode))
+  m_iVSyncMode = enable ? 10:0;
+  if (!m_egl->SetVSync(m_display, enable))
+  {
+    m_iVSyncMode = 0;
     CLog::Log(LOGERROR, "%s,Could not set egl vsync", __FUNCTION__);
+  }
 }
 
 void CWinSystemEGL::ShowOSMouse(bool show)
@@ -437,33 +441,51 @@ EGLContext CWinSystemEGL::GetEGLContext()
   return m_context;
 }
 
+// the logic in this function should match whether CBaseRenderer::FindClosestResolution picks a 3D mode
 bool CWinSystemEGL::Support3D(int width, int height, uint32_t mode) const
 {
-  bool bFound = false;
-  int searchMode = 0;
-  int searchWidth = width;
-  int searchHeight = height;
+  RESOLUTION_INFO &curr = g_settings.m_ResInfo[g_graphicsContext.GetVideoResolution()];
 
-  if (mode & D3DPRESENTFLAG_MODE3DSBS)
+  // if we are using automatic hdmi mode switching
+  if (g_guiSettings.GetInt("videoplayer.adjustrefreshrate") != ADJUST_REFRESHRATE_OFF)
   {
-    searchWidth /= 2;
-    searchMode = D3DPRESENTFLAG_MODE3DSBS;
+    int searchWidth = curr.iScreenWidth;
+    int searchHeight = curr.iScreenHeight;
+
+    // work out current non-3D resolution (in case we are currently in 3D mode)
+    if (curr.dwFlags & D3DPRESENTFLAG_MODE3DSBS)
+    {
+      searchWidth *= 2;
+    }
+    else if (curr.dwFlags & D3DPRESENTFLAG_MODE3DTB)
+    {
+      searchHeight *= 2;
+    }
+    // work out resolution if we switch to 3D mode
+    if (mode & D3DPRESENTFLAG_MODE3DSBS)
+    {
+      searchWidth /= 2;
+    }
+    else if (mode & D3DPRESENTFLAG_MODE3DTB)
+    {
+      searchHeight /= 2;
+    }
+    // only search the custom resolutions
+    for (unsigned int i = (int)RES_DESKTOP; i < g_settings.m_ResInfo.size(); i++)
+    {
+      RESOLUTION_INFO res = g_settings.m_ResInfo[i];
+      if(res.iScreenWidth == searchWidth && res.iScreenHeight == searchHeight && (res.dwFlags & mode))
+        return true;
+    }
   }
-  else if (mode & D3DPRESENTFLAG_MODE3DTB)
+  // otherwise just consider current mode
+  else
   {
-    searchHeight /= 2;
-    searchMode = D3DPRESENTFLAG_MODE3DTB;
+     if (curr.dwFlags & mode)
+       return true;
   }
 
-  for (unsigned int i = 0; i < g_settings.m_ResInfo.size(); i++)
-  {
-    RESOLUTION_INFO res = g_settings.m_ResInfo[i];
-
-    if(res.iWidth == searchWidth && res.iHeight == searchHeight && (res.dwFlags & searchMode))
-      return true;
-  }
-
-  return bFound;
+  return false;
 }
 
 bool CWinSystemEGL::ClampToGUIDisplayLimits(int &width, int &height)

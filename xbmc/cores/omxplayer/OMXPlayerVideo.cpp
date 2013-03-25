@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -99,8 +99,8 @@ OMXPlayerVideo::OMXPlayerVideo(OMXClock *av_clock,
   m_messageQueue.SetMaxTimeSize(8.0);
 
   RESOLUTION res  = g_graphicsContext.GetVideoResolution();
-  m_video_width   = g_settings.m_ResInfo[res].iWidth;
-  m_video_height  = g_settings.m_ResInfo[res].iHeight;
+  m_video_width   = g_settings.m_ResInfo[res].iScreenWidth;
+  m_video_height  = g_settings.m_ResInfo[res].iScreenHeight;
 
   m_dst_rect.SetRect(0, 0, 0, 0);
 
@@ -124,6 +124,7 @@ bool OMXPlayerVideo::OpenStream(CDVDStreamInfo &hints)
   m_started     = false;
   m_stalled     = m_messageQueue.GetPacketCount(CDVDMsg::DEMUXER_PACKET) == 0;
   m_autosync    = 1;
+  m_iSleepEndTime = DVD_NOPTS_VALUE;
 
   m_audio_count = m_av_clock->HasAudio();
 
@@ -337,15 +338,24 @@ void OMXPlayerVideo::Output(int iGroupId, double pts, bool bDropPacket)
         flags |= CONF_FLAGS_FORMAT_SBS;
       }
     }
-
-    CLog::Log(LOGDEBUG,"%s - change configuration. %dx%d. framerate: %4.2f. format: BYPASS",
-        __FUNCTION__, m_width, m_height, m_fps);
+    else if(m_flags & CONF_FLAGS_FORMAT_TB)
+    {
+      if(g_Windowing.Support3D(m_video_width, m_video_height, D3DPRESENTFLAG_MODE3DTB))
+      {
+        CLog::Log(LOGNOTICE, "3DTB movie found");
+        flags |= CONF_FLAGS_FORMAT_TB;
+      }
+    }
 
     unsigned int iDisplayWidth  = m_hints.width;
     unsigned int iDisplayHeight = m_hints.height;
+
     /* use forced aspect if any */
     if( m_fForcedAspectRatio != 0.0f )
       iDisplayWidth = (int) (iDisplayHeight * m_fForcedAspectRatio);
+
+    CLog::Log(LOGDEBUG,"%s - change configuration. %dx%d. framerate: %4.2f. %dx%x format: BYPASS",
+        __FUNCTION__, m_width, m_height, m_fps, iDisplayWidth, iDisplayHeight);
 
     if(!g_renderManager.Configure(m_hints.width, m_hints.height,
           iDisplayWidth, iDisplayHeight, m_fps, flags, format, 0,
@@ -443,13 +453,23 @@ void OMXPlayerVideo::Output(int iGroupId, double pts, bool bDropPacket)
   m_dropbase = 0.0f;
 #endif
 
-  double pts_media = m_av_clock->OMXMediaTime();
+  // DVDPlayer sleeps until m_iSleepEndTime here before calling FlipPage.
+  // Video playback in asynchronous in OMXPlayer, so we don't want to do that here, as it prevents the video fifo from being kept full.
+  // So, we keep track of when FlipPage would have been called on DVDPlayer and return early if it is not time.
+  // m_iSleepEndTime == DVD_NOPTS_VALUE means we are not waiting to call FlipPage, otherwise it is the time we want to call FlipPage
+  if (m_iSleepEndTime == DVD_NOPTS_VALUE) {
+    m_iSleepEndTime = iCurrentClock + iSleepTime;
+  }
+
+  if (!CThread::m_bStop && m_av_clock->GetAbsoluteClock(false) < m_iSleepEndTime + DVD_MSEC_TO_TIME(500))
+    return;
+
+  double pts_media = m_av_clock->OMXMediaTime(false, false);
   ProcessOverlays(iGroupId, pts_media);
 
-  while(!CThread::m_bStop && m_av_clock->GetAbsoluteClock(false) < (iCurrentClock + iSleepTime + DVD_MSEC_TO_TIME(500)) )
-    Sleep(1);
+  g_renderManager.FlipPage(CThread::m_bStop, m_iSleepEndTime / DVD_TIME_BASE, -1, FS_NONE);
 
-  g_renderManager.FlipPage(CThread::m_bStop, (iCurrentClock + iSleepTime) / DVD_TIME_BASE, -1, FS_NONE);
+  m_iSleepEndTime = DVD_NOPTS_VALUE;
 
   //m_av_clock->WaitAbsoluteClock((iCurrentClock + iSleepTime));
 }
@@ -560,12 +580,14 @@ void OMXPlayerVideo::Process()
       m_av_clock->OMXReset(false);
       m_av_clock->UnLock();
       m_started = false;
+      m_iSleepEndTime = DVD_NOPTS_VALUE;
     }
     else if (pMsg->IsType(CDVDMsg::GENERAL_FLUSH)) // private message sent by (COMXPlayerVideo::Flush())
     {
       CLog::Log(LOGDEBUG, "COMXPlayerVideo - CDVDMsg::GENERAL_FLUSH");
       m_stalled = true;
       m_started = false;
+      m_iSleepEndTime = DVD_NOPTS_VALUE;
       m_av_clock->Lock();
       m_av_clock->OMXStop(false);
       m_omxVideo.Reset();
@@ -813,21 +835,22 @@ void OMXPlayerVideo::SetVideoRect(const CRect &SrcRect, const CRect &DestRect)
   CRect gui, display, dst_rect;
   RESOLUTION res = g_graphicsContext.GetVideoResolution();
   gui.SetRect(0, 0, g_settings.m_ResInfo[res].iWidth, g_settings.m_ResInfo[res].iHeight);
-  display.SetRect(0, 0, g_settings.m_ResInfo[res].iWidth, g_settings.m_ResInfo[res].iHeight);
+  display.SetRect(0, 0, g_settings.m_ResInfo[res].iScreenWidth, g_settings.m_ResInfo[res].iScreenHeight);
   
   dst_rect = m_dst_rect;
   if (gui != display)
   {
     float xscale = display.Width()  / gui.Width();
     float yscale = display.Height() / gui.Height();
+    // video is displayed in absolute coordinates (bypassing half width or height GUI mode)
+    if (m_flags & CONF_FLAGS_FORMAT_SBS) xscale *= 2.0f;
+    if (m_flags & CONF_FLAGS_FORMAT_TB)  yscale *= 2.0f;
     dst_rect.x1 *= xscale;
     dst_rect.x2 *= xscale;
     dst_rect.y1 *= yscale;
     dst_rect.y2 *= yscale;
   }
-
-  if(!(m_flags & CONF_FLAGS_FORMAT_SBS) && !(m_flags & CONF_FLAGS_FORMAT_TB))
-    m_omxVideo.SetVideoRect(SrcRect, m_dst_rect);
+  m_omxVideo.SetVideoRect(SrcRect, dst_rect);
 }
 
 void OMXPlayerVideo::RenderUpdateCallBack(const void *ctx, const CRect &SrcRect, const CRect &DestRect)

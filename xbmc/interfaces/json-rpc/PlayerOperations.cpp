@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -113,14 +113,16 @@ JSONRPC_STATUS CPlayerOperations::GetItem(const CStdString &method, ITransportLa
         if (IsPVRChannel())
         {
           CPVRChannelPtr currentChannel;
-          if (g_PVRManager.GetCurrentChannel(currentChannel))
+          if (g_PVRManager.GetCurrentChannel(currentChannel) && currentChannel.get() != NULL)
             fileItem = CFileItemPtr(new CFileItem(*currentChannel.get()));
         }
         else if (player == Video)
         {
           if (!CVideoLibrary::FillFileItem(g_application.CurrentFile(), fileItem, parameterObject))
           {
-            fileItem = CFileItemPtr(new CFileItem(*g_infoManager.GetCurrentMovieTag()));
+            const CVideoInfoTag *currentVideoTag = g_infoManager.GetCurrentMovieTag();
+            if (currentVideoTag != NULL)
+              fileItem = CFileItemPtr(new CFileItem(*currentVideoTag));
             fileItem->SetPath(g_application.CurrentFileItem().GetPath());
           }
         }
@@ -128,7 +130,9 @@ JSONRPC_STATUS CPlayerOperations::GetItem(const CStdString &method, ITransportLa
         {
           if (!CAudioLibrary::FillFileItem(g_application.CurrentFile(), fileItem, parameterObject))
           {
-            fileItem = CFileItemPtr(new CFileItem(*g_infoManager.GetCurrentSongTag()));
+            const MUSIC_INFO::CMusicInfoTag *currentMusicTag = g_infoManager.GetCurrentSongTag();
+            if (currentMusicTag != NULL)
+              fileItem = CFileItemPtr(new CFileItem(*currentMusicTag));
             fileItem->SetPath(g_application.CurrentFileItem().GetPath());
           }
         }
@@ -140,7 +144,6 @@ JSONRPC_STATUS CPlayerOperations::GetItem(const CStdString &method, ITransportLa
       if (player == Video)
       {
         bool additionalInfo = false;
-        bool streamdetails = false;
         for (CVariant::const_iterator_array itr = parameterObject["properties"].begin_array(); itr != parameterObject["properties"].end_array(); itr++)
         {
           CStdString fieldValue = itr->asString();
@@ -227,7 +230,14 @@ JSONRPC_STATUS CPlayerOperations::PlayPause(const CStdString &method, ITransport
         CBuiltins::Execute("playercontrol(play)");
       else
       {
-        if (parameterObject["play"].asBoolean() == g_application.IsPaused())
+        if (parameterObject["play"].asBoolean())
+        {
+          if (g_application.IsPaused())
+            CApplicationMessenger::Get().MediaPause();
+          else if (g_application.GetPlaySpeed() != 1)
+            g_application.SetPlaySpeed(1);
+        }
+        else if (!g_application.IsPaused())
           CApplicationMessenger::Get().MediaPause();
       }
       result["speed"] = g_application.IsPaused() ? 0 : g_application.GetPlaySpeed();
@@ -258,7 +268,7 @@ JSONRPC_STATUS CPlayerOperations::Stop(const CStdString &method, ITransportLayer
   {
     case Video:
     case Audio:
-      CApplicationMessenger::Get().SendAction(CAction(ACTION_STOP));
+      CApplicationMessenger::Get().MediaStop(true, (int)parameterObject["playerid"].asInteger());
       return ACK;
 
     case Picture:
@@ -1358,10 +1368,11 @@ JSONRPC_STATUS CPlayerOperations::GetPropertyValue(PlayerType player, const CStd
             value.Empty();
             g_application.m_pPlayer->GetAudioStreamLanguage(index, value);
             result["language"] = value;
+
+            result["codec"] = g_application.m_pPlayer->GetAudioCodecName();
+            result["bitrate"] = g_application.m_pPlayer->GetAudioBitrate();
+            result["channels"] = g_application.m_pPlayer->GetChannels();
           }
-          result["codec"] = g_application.m_pPlayer->GetAudioCodecName();
-          result["bitrate"] = g_application.m_pPlayer->GetAudioBitrate();
-          result["channels"] = g_application.m_pPlayer->GetChannels();
         }
         else
           result = CVariant(CVariant::VariantTypeNull);

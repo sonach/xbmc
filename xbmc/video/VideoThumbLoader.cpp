@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -267,6 +267,10 @@ bool CVideoThumbLoader::LoadItem(CFileItem* pItem)
         pItem->SetProperty("HasAutoThumb", true);
         pItem->SetProperty("AutoThumbImage", thumbURL);
         pItem->SetArt("thumb", thumbURL);
+        // Item has cached autogen image but no art entry. Save it to db.
+        CVideoInfoTag* info = pItem->GetVideoInfoTag();
+        if (info->m_iDbId > 0 && !info->m_type.empty())
+          m_database->SetArtForItem(info->m_iDbId, info->m_type, "thumb", thumbURL);
       }
       else if (g_guiSettings.GetBool("myvideos.extractthumb") &&
         g_guiSettings.GetBool("myvideos.extractflags"))

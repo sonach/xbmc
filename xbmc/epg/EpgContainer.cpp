@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2012 Team XBMC
+ *      Copyright (C) 2012-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -227,6 +227,12 @@ void CEpgContainer::Process(void)
   time_t iNow(0), iLastSave(0);
   bool bUpdateEpg(true);
   bool bHasPendingUpdates(false);
+
+  if (!CPVRManager::Get().WaitUntilInitialised())
+  {
+    CLog::Log(LOGDEBUG, "EPG - %s - pvr manager failed to load - exiting", __FUNCTION__);
+    return;
+  }
 
   while (!m_bStop && !g_application.m_bStop)
   {

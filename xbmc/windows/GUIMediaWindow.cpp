@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -777,16 +777,13 @@ bool CGUIMediaWindow::Update(const CStdString &strDirectory, bool updateFilterPa
   if (!GetDirectory(directory, items))
   {
     CLog::Log(LOGERROR,"CGUIMediaWindow::GetDirectory(%s) failed", strDirectory.c_str());
-    // if the directory is the same as the old directory, then we'll return
-    // false.  Else, we assume we can get the previous directory
-    if (strDirectory.Equals(strCurrentDirectory))
-      return false;
+    // Try to return to the previous directory, if not the same
+    // else fallback to root
+    if (strDirectory.Equals(strCurrentDirectory) || !Update(m_history.RemoveParentPath()))
+      Update(""); // Fallback to root
 
-    // We assume, we can get the parent
-    // directory again, but we have to
-    // return false to be able to eg. show
+    // Return false to be able to eg. show
     // an error message.
-    Update(m_history.RemoveParentPath());
     return false;
   }
 
@@ -842,11 +839,15 @@ bool CGUIMediaWindow::Update(const CStdString &strDirectory, bool updateFilterPa
 
   int iWindow = GetID();
   int showLabel = 0;
-  if (strDirectory.IsEmpty() && (iWindow == WINDOW_MUSIC_FILES ||
-                                 iWindow == WINDOW_FILES ||
-                                 iWindow == WINDOW_PICTURES ||
-                                 iWindow == WINDOW_PROGRAMS))
-    showLabel = 1026;
+  if (strDirectory.IsEmpty())
+  {
+    if (iWindow == WINDOW_PICTURES)
+      showLabel = 997;
+    else if (iWindow == WINDOW_MUSIC_FILES)
+      showLabel = 998;
+    else if (iWindow == WINDOW_FILES || iWindow == WINDOW_PROGRAMS)
+      showLabel = 1026;
+  }
   if (strDirectory.Equals("sources://video/"))
     showLabel = 999;
   if (showLabel && (m_vecItems->Size() == 0 || !m_guiState->DisableAddSourceButtons())) // add 'add source button'
@@ -872,18 +873,6 @@ bool CGUIMediaWindow::Update(const CStdString &strDirectory, bool updateFilterPa
   //  for the fileitems like media info or additional
   //  filtering on the items, setting thumbs.
   OnPrepareFileItems(*m_vecItems);
-
-  // The idea here is to ensure we have something to focus if our file list
-  // is empty.  As such, this check MUST be last and ignore the hide parent
-  // fileitems settings.
-  if (m_vecItems->IsEmpty())
-  {
-    CFileItemPtr pItem(new CFileItem(".."));
-    pItem->SetPath(m_history.GetParentPath());
-    pItem->m_bIsFolder = true;
-    pItem->m_bIsShareOrDrive = false;
-    m_vecItems->AddFront(pItem, 0);
-  }
 
   m_vecItems->FillInDefaultIcons();
 
@@ -946,21 +935,8 @@ bool CGUIMediaWindow::Refresh(bool clearCache /* = false */)
     m_vecItems->RemoveDiscCache(GetID());
 
   // get the original number of items
-  int oldCount = m_filter.IsEmpty() ? m_vecItems->Size() : m_unfilteredItems->Size();
   if (!Update(strCurrentDirectory, false))
     return false;
-
-  // check if we previously had at least 1 item
-  // in the list and whether it now went down to 0
-  // if there are no more items to show after the update
-  // we go one level up in the hierachry to not show an
-  // empty list
-  if (oldCount > 0 &&
-     (m_filter.IsEmpty() ? m_vecItems->Size() : m_unfilteredItems->Size()) <= 0)
-  {
-    CGUIDialogKaiToast::QueueNotification(CGUIDialogKaiToast::Info, g_localizeStrings.Get(2080), g_localizeStrings.Get(2081));
-    GoParentFolder();
-  }
 
   return true;
 }
@@ -1188,21 +1164,18 @@ bool CGUIMediaWindow::HaveDiscOrConnection(const CStdString& strPath, int iDrive
 // \brief Shows a standard errormessage for a given pItem.
 void CGUIMediaWindow::ShowShareErrorMessage(CFileItem* pItem)
 {
-  if (pItem->m_bIsShareOrDrive)
-  {
-    int idMessageText=0;
-    const CURL& url=pItem->GetAsUrl();
-    const CStdString& strHostName=url.GetHostName();
+  int idMessageText = 0;
+  CURL url(pItem->GetPath());
+  const CStdString& strHostName = url.GetHostName();
 
-    if (pItem->m_iDriveType != CMediaSource::SOURCE_TYPE_REMOTE) //  Local shares incl. dvd drive
-      idMessageText=15300;
-    else if (url.GetProtocol() == "smb" && strHostName.IsEmpty()) //  smb workgroup
-      idMessageText=15303;
-    else  //  All other remote shares
-      idMessageText=15301;
+  if (url.GetProtocol() == "smb" && strHostName.IsEmpty()) //  smb workgroup
+    idMessageText = 15303; // Workgroup not found
+  else if (pItem->m_iDriveType == CMediaSource::SOURCE_TYPE_REMOTE || URIUtils::IsRemote(pItem->GetPath()))
+    idMessageText = 15301; // Could not connect to network server
+  else
+    idMessageText = 15300; // Path not found or invalid
 
-    CGUIDialogOK::ShowAndGetInput(220, idMessageText, 0, 0);
-  }
+  CGUIDialogOK::ShowAndGetInput(220, idMessageText, 0, 0);
 }
 
 // \brief The functon goes up one level in the directory tree
@@ -1353,6 +1326,13 @@ void CGUIMediaWindow::SetHistoryForPath(const CStdString& strDirectory)
           //m_history.DumpPathHistory();
           return ;
         }
+      }
+
+      if (URIUtils::IsVideoDb(strPath))
+      {
+        CURL url(strParentPath);
+        url.SetOptions(""); // clear any URL options from recreated parent path
+        strParentPath = url.Get();
       }
 
       URIUtils::AddSlashAtEnd(strPath);
@@ -1623,7 +1603,11 @@ bool CGUIMediaWindow::OnContextButton(int itemNumber, CONTEXT_BUTTON button)
     }
   case CONTEXT_BUTTON_PLUGIN_SETTINGS:
     {
-      CURL plugin(m_vecItems->Get(itemNumber)->GetPath());
+      CFileItemPtr item = m_vecItems->Get(itemNumber);
+      // CONTEXT_BUTTON_PLUGIN_SETTINGS can be called for plugin item
+      // or script item; or for the plugin directory current listing.
+      bool isPluginOrScriptItem = (item && (item->IsPlugin() || item->IsScript()));
+      CURL plugin(isPluginOrScriptItem ? item->GetPath() : m_vecItems->GetPath());
       ADDON::AddonPtr addon;
       if (CAddonMgr::Get().GetAddon(plugin.GetHostName(), addon))
         if (CGUIDialogAddonSettings::ShowAndGetInput(addon))
@@ -1702,7 +1686,8 @@ void CGUIMediaWindow::OnFilterItems(const CStdString &filter)
   
   m_viewControl.Clear();
   
-  CFileItemList items(m_vecItems->GetPath()); // use the original path - it'll likely be relied on for other things later.
+  CFileItemList items;
+  items.Copy(*m_vecItems, false); // use the original path - it'll likely be relied on for other things later.
   items.Append(*m_unfilteredItems);
   bool filtered = GetFilteredItems(filter, items);
 
@@ -1716,7 +1701,11 @@ void CGUIMediaWindow::OnFilterItems(const CStdString &filter)
   {
     if (items.HasProperty(PROPERTY_PATH_DB))
       m_strFilterPath = items.GetProperty(PROPERTY_PATH_DB).asString();
-    else
+    // only set m_strFilterPath if it hasn't been set before
+    // otherwise we might overwrite it with a non-filter path
+    // in case GetFilteredItems() returns true even though no
+    // db-based filter (e.g. watched filter) has been applied
+    else if (m_strFilterPath.empty())
       m_strFilterPath = items.GetPath();
   }
   
@@ -1768,7 +1757,19 @@ void CGUIMediaWindow::OnFilterItems(const CStdString &filter)
       }
     }
   }
-  
+
+  // The idea here is to ensure we have something to focus if our file list
+  // is empty.  As such, this check MUST be last and ignore the hide parent
+  // fileitems settings.
+  if (m_vecItems->IsEmpty())
+  {
+    CFileItemPtr pItem(new CFileItem(".."));
+    pItem->SetPath(m_history.GetParentPath());
+    pItem->m_bIsFolder = true;
+    pItem->m_bIsShareOrDrive = false;
+    m_vecItems->AddFront(pItem, 0);
+  }
+
   // and update our view control + buttons
   m_viewControl.SetItems(*m_vecItems);
   m_viewControl.SetSelectedItem(currentItemPath);

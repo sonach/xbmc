@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -423,7 +423,16 @@ float CGUIFontTTFBase::GetTextWidthInternal(vecText::const_iterator start, vecTe
   while (start != end)
   {
     Character *c = GetCharacter(*start++);
-    if (c) width += c->advance;
+    if (c)
+    {
+      // If last character in line, we want to add render width
+      // and not advance distance - this makes sure that italic text isn't
+      // choped on the end (as render width is larger than advance then).
+      if (start == end)
+        width += max(c->right - c->left + c->offsetX, c->advance);
+      else
+        width += c->advance;
+    }
   }
   return width;
 }
