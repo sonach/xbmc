@@ -421,10 +421,11 @@ void CLinuxRendererGLES::RenderUpdate(bool clear, DWORD flags, DWORD alpha)
 
     g_graphicsContext.BeginPaint();
 
-    glScissor(m_destRect.x1, 
-              iHeight - m_destRect.y2, 
-              m_destRect.x2 - m_destRect.x1, 
-              m_destRect.y2 - m_destRect.y1);
+    //glScissor(m_destRect.x1, 
+      //        iHeight - m_destRect.y2, 
+        //      m_destRect.x2 - m_destRect.x1, 
+          //    m_destRect.y2 - m_destRect.y1);
+    glScissor(0, 0, iWidth, iHeight);//for the black edge of the video
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glClearColor(0, 0, 0, 0);
