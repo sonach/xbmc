@@ -227,6 +227,7 @@
 						</control>
 					</control>
 				</control>
+				<!--sunxt130321
 				<control type="image">
 					<description>xbmc image</description>
 					<animation effect="fade" time="200" start="100" end="0" condition="Player.HasMedia">Conditional</animation>
@@ -236,6 +237,7 @@
 					<height>38</height>
 					<texture>icons/xbmcicon.png</texture>
 				</control>
+				-->
 				<control type="group" id="9200">
 					<include>Main_Menu_Fade_Animation</include>
 					<animation type="Conditional" condition="Window.IsVisible(progressdialog)" reversible="true">
