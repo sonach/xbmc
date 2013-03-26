@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2012 Team XBMC
+ *      Copyright (C) 2012-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -190,8 +190,9 @@ void CEdenVideoArtUpdater::Process()
       {
         std::string cachedSeason = GetCachedSeasonThumb(j->first, item->GetVideoInfoTag()->m_strPath);
         std::string type;
-        if (CacheTexture(j->second.begin()->second, cachedSeason, "", type))
-          db.SetArtForItem(idSeason, "season", type, j->second.begin()->second);
+        std::string originalUrl = j->second.begin()->second;
+        if (CacheTexture(originalUrl, cachedSeason, "", type))
+          db.SetArtForItem(idSeason, "season", type, originalUrl);
       }
     }
 
@@ -278,23 +279,23 @@ void CEdenVideoArtUpdater::Process()
   items.Clear();
 }
 
-bool CEdenVideoArtUpdater::CacheTexture(const std::string &originalUrl, const std::string &cachedFile, const std::string &label)
+bool CEdenVideoArtUpdater::CacheTexture(std::string &originalUrl, const std::string &cachedFile, const std::string &label)
 {
   std::string type;
   return CacheTexture(originalUrl, cachedFile, label, type);
 }
 
-bool CEdenVideoArtUpdater::CacheTexture(const std::string &originalUrl, const std::string &cachedFile, const std::string &label, std::string &type)
+bool CEdenVideoArtUpdater::CacheTexture(std::string &originalUrl, const std::string &cachedFile, const std::string &label, std::string &type)
 {
-  if (originalUrl.empty())
-  {
-    CLog::Log(LOGERROR, "%s No original url for item %s", __FUNCTION__, label.c_str());
-    return false;
-  }
   if (!CFile::Exists(cachedFile))
   {
     CLog::Log(LOGERROR, "%s No cached art for item %s (should be %s)", __FUNCTION__, label.c_str(), cachedFile.c_str());
     return false;
+  }
+  if (originalUrl.empty())
+  {
+    originalUrl = GetThumb(cachedFile, "http://unknown/video/", true);
+    CLog::Log(LOGERROR, "%s No original url for item %s, but cached art exists, using %s", __FUNCTION__, label.c_str(), originalUrl.c_str());
   }
 
   CTextureDetails details;

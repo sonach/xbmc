@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2012 Team XBMC
+ *      Copyright (C) 2012-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -294,7 +294,6 @@ bool CPVRChannelGroups::Load(void)
 
   // set the internal group as selected at startup
   internalChannels->SetSelectedGroup(true);
-  internalChannels->Renumber();
   m_selectedGroup = internalChannels;
 
   CLog::Log(LOGDEBUG, "PVR - %s - %d %s channel groups loaded", __FUNCTION__, (int) m_groups.size(), m_bRadio ? "radio" : "TV");

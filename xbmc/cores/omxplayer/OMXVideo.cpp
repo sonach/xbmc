@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2010-2012 Team XBMC
+ *      Copyright (C) 2010-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -69,7 +69,10 @@
 #define OMX_MPEG2V_DECODER      OMX_VIDEO_DECODER
 #define OMX_VC1_DECODER         OMX_VIDEO_DECODER
 #define OMX_WMV3_DECODER        OMX_VIDEO_DECODER
+#define OMX_VP6_DECODER         OMX_VIDEO_DECODER
 #define OMX_VP8_DECODER         OMX_VIDEO_DECODER
+#define OMX_THEORA_DECODER      OMX_VIDEO_DECODER
+#define OMX_MJPEG_DECODER       OMX_VIDEO_DECODER
 
 #define MAX_TEXT_LENGTH 1024
 
@@ -145,6 +148,7 @@ bool COMXVideo::NaluFormatStartCodes(enum CodecID codec, uint8_t *in_extradata, 
 
 bool COMXVideo::Open(CDVDStreamInfo &hints, OMXClock *clock, bool deinterlace, bool hdmi_clock_sync)
 {
+  bool vflip = false;
   Close();
 
   OMX_ERRORTYPE omx_err   = OMX_ErrorNone;
@@ -248,12 +252,39 @@ bool COMXVideo::Open(CDVDStreamInfo &hints, OMXClock *clock, bool deinterlace, b
       m_codingType = OMX_VIDEO_CodingMPEG4;
       m_video_codec_name = "omx-h263";
       break;
+    case CODEC_ID_VP6:
+      // this form is encoded upside down
+      vflip = true;
+      // fall through
+    case CODEC_ID_VP6F:
+    case CODEC_ID_VP6A:
+      // (role name) video_decoder.vp6
+      // VP6
+      decoder_name = OMX_VP6_DECODER;
+      m_codingType = OMX_VIDEO_CodingVP6;
+      m_video_codec_name = "omx-vp6";
+    break;
     case CODEC_ID_VP8:
       // (role name) video_decoder.vp8
       // VP8
       decoder_name = OMX_VP8_DECODER;
       m_codingType = OMX_VIDEO_CodingVP8;
       m_video_codec_name = "omx-vp8";
+    break;
+    case CODEC_ID_THEORA:
+      // (role name) video_decoder.theora
+      // theora
+      decoder_name = OMX_THEORA_DECODER;
+      m_codingType = OMX_VIDEO_CodingTheora;
+      m_video_codec_name = "omx-theora";
+    break;
+    case CODEC_ID_MJPEG:
+    case CODEC_ID_MJPEGB:
+      // (role name) video_decoder.mjpg
+      // mjpg
+      decoder_name = OMX_MJPEG_DECODER;
+      m_codingType = OMX_VIDEO_CodingMJPEG;
+      m_video_codec_name = "omx-mjpeg";
     break;
     case CODEC_ID_VC1:
     case CODEC_ID_WMV3:
@@ -436,6 +467,23 @@ bool COMXVideo::Open(CDVDStreamInfo &hints, OMXClock *clock, bool deinterlace, b
     }
   }
 
+  // broadcom omx entension:
+  // When enabled, the timestamp fifo mode will change the way incoming timestamps are associated with output images.
+  // In this mode the incoming timestamps get used without re-ordering on output images.
+  if(hints.ptsinvalid)
+  {
+    OMX_CONFIG_BOOLEANTYPE timeStampMode;
+    OMX_INIT_STRUCTURE(timeStampMode);
+    timeStampMode.bEnabled = OMX_TRUE;
+
+    omx_err = m_omx_decoder.SetParameter((OMX_INDEXTYPE)OMX_IndexParamBrcmVideoTimestampFifo, &timeStampMode);
+    if (omx_err != OMX_ErrorNone)
+    {
+      CLog::Log(LOGERROR, "COMXVideo::Open OMX_IndexParamBrcmVideoTimestampFifo error (0%08x)\n", omx_err);
+      return false;
+    }
+  }
+
   if(NaluFormatStartCodes(hints.codec, m_extradata, m_extrasize))
   {
     OMX_NALSTREAMFORMATTYPE nalStreamFormat;
@@ -577,6 +625,8 @@ bool COMXVideo::Open(CDVDStreamInfo &hints, OMXClock *clock, bool deinterlace, b
       configDisplay.transform = OMX_DISPLAY_ROT0;
       break;
   }
+  if (vflip)
+      configDisplay.transform = OMX_DISPLAY_MIRROR_ROT180;
 
   omx_err = m_omx_render.SetConfig(OMX_IndexConfigDisplayRegion, &configDisplay);
   if(omx_err != OMX_ErrorNone)
@@ -648,6 +698,9 @@ bool COMXVideo::Open(CDVDStreamInfo &hints, OMXClock *clock, bool deinterlace, b
     m_deinterlace, m_hdmi_clock_sync);
 
   m_first_frame   = true;
+  // start from assuming all recent frames had valid pts
+  m_history_valid_pts = ~0;
+
   return true;
 }
 
@@ -702,15 +755,19 @@ unsigned int COMXVideo::GetSize()
   return m_omx_decoder.GetInputBufferSize();
 }
 
+static unsigned count_bits(int32_t value)
+{
+  unsigned bits = 0;
+  for(;value;++bits)
+    value &= value - 1;
+  return bits;
+}
+
 int COMXVideo::Decode(uint8_t *pData, int iSize, double dts, double pts)
 {
   OMX_ERRORTYPE omx_err;
 
   if( m_drop_state )
-    return true;
-
-  // avi files with packed B frames have "not-coded" dummy frames that decoder doesn't like
-  if (m_codingType == OMX_VIDEO_CodingMPEG4 && iSize <= 7)
     return true;
 
   unsigned int demuxer_bytes = (unsigned int)iSize;
@@ -740,29 +797,31 @@ int COMXVideo::Decode(uint8_t *pData, int iSize, double dts, double pts)
 
       omx_buffer->nFlags = 0;
       omx_buffer->nOffset = 0;
-
-      uint64_t val  = (uint64_t)(pts == DVD_NOPTS_VALUE) ? 0 : pts;
+      // some packed bitstream AVI files set almost all pts values to DVD_NOPTS_VALUE, but have a scattering of real pts values.
+      // the valid pts values match the dts values.
+      // if a stream has had more than 4 valid pts values in the last 16, the use UNKNOWN, otherwise use dts
+      m_history_valid_pts = (m_history_valid_pts << 1) | (pts != DVD_NOPTS_VALUE);
+      if(pts == DVD_NOPTS_VALUE && count_bits(m_history_valid_pts & 0xffff) < 4)
+        pts = dts;
 
       if(m_av_clock->VideoStart())
       {
-        // only send dts on first frame to get nerly correct starttime
+        // only send dts on first frame to get nearly correct starttime
         if(pts == DVD_NOPTS_VALUE)
           pts = dts;
-        val  = (uint64_t)(pts == DVD_NOPTS_VALUE) ? 0 : pts;
-
+        if(pts == DVD_NOPTS_VALUE)
+          omx_buffer->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
         omx_buffer->nFlags = OMX_BUFFERFLAG_STARTTIME;
-        CLog::Log(LOGDEBUG, "OMXVideo::Decode VDec : setStartTime %f\n", (float)val / DVD_TIME_BASE);
+        CLog::Log(LOGDEBUG, "OMXVideo::Decode VDec : setStartTime %f\n", (pts == DVD_NOPTS_VALUE ? 0.0 : pts) / DVD_TIME_BASE);
         m_av_clock->VideoStart(false);
-        omx_buffer->nTimeStamp = ToOMXTime(val);
       }
       else
       {
         if(pts == DVD_NOPTS_VALUE)
           omx_buffer->nFlags = OMX_BUFFERFLAG_TIME_UNKNOWN;
-        omx_buffer->nTimeStamp = ToOMXTime(val);
       }
 
-
+      omx_buffer->nTimeStamp = ToOMXTime((uint64_t)(pts == DVD_NOPTS_VALUE) ? 0 : pts);
       omx_buffer->nFilledLen = (demuxer_bytes > omx_buffer->nAllocLen) ? omx_buffer->nAllocLen : demuxer_bytes;
       memcpy(omx_buffer->pBuffer, demuxer_content, omx_buffer->nFilledLen);
 
@@ -914,14 +973,8 @@ void COMXVideo::SetVideoRect(const CRect& SrcRect, const CRect& DestRect)
     return;
 
   OMX_CONFIG_DISPLAYREGIONTYPE configDisplay;
-  OMX_INIT_STRUCTURE(configDisplay);
-  configDisplay.nPortIndex = m_omx_render.GetInputPort();
-  RESOLUTION res = g_graphicsContext.GetVideoResolution();
-  // DestRect is in GUI coordinates, rather than display coordinates, so we have to scale
-  float xscale = (float)g_settings.m_ResInfo[res].iScreenWidth  / (float)g_settings.m_ResInfo[res].iWidth;
-  float yscale = (float)g_settings.m_ResInfo[res].iScreenHeight / (float)g_settings.m_ResInfo[res].iHeight;
   float sx1 = SrcRect.x1, sy1 = SrcRect.y1, sx2 = SrcRect.x2, sy2 = SrcRect.y2;
-  float dx1 = DestRect.x1*xscale, dy1 = DestRect.y1*yscale, dx2 = DestRect.x2*xscale, dy2 = DestRect.y2*yscale;
+  float dx1 = DestRect.x1, dy1 = DestRect.y1, dx2 = DestRect.x2, dy2 = DestRect.y2;
   float sw = SrcRect.Width() / DestRect.Width();
   float sh = SrcRect.Height() / DestRect.Height();
 
@@ -935,6 +988,8 @@ void COMXVideo::SetVideoRect(const CRect& SrcRect, const CRect& DestRect)
     dy1 -= dy1;
   }
 
+  OMX_INIT_STRUCTURE(configDisplay);
+  configDisplay.nPortIndex = m_omx_render.GetInputPort();
   configDisplay.fullscreen = OMX_FALSE;
   configDisplay.noaspect   = OMX_TRUE;
 

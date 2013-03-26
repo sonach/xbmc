@@ -1,7 +1,7 @@
 #pragma once
 
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -145,6 +145,8 @@ public:
   void StopJSONRPCServer(bool bWait);
   void StartUPnP();
   void StopUPnP(bool bWait);
+  void StartUPnPClient();
+  void StopUPnPClient();
   void StartUPnPRenderer();
   void StopUPnPRenderer();
   void StartUPnPServer();
@@ -156,7 +158,6 @@ public:
   void RefreshEventServer();
   void StartZeroconf();
   void StopZeroconf();
-  void DimLCDOnPlayback(bool dim);
   bool IsCurrentThread() const;
   void Stop(int exitCode);
   void RestartApp();
@@ -296,7 +297,6 @@ public:
   inline bool IsInScreenSaver() { return m_bScreenSave; };
   int m_iScreenSaveLock; // spiff: are we checking for a lock? if so, ignore the screensaver state, if -1 we have failed to input locks
 
-  bool m_bIsPaused;
   bool m_bPlaybackStarting;
 
   CKaraokeLyricsManager* m_pKaraokeMgr;
@@ -378,14 +378,15 @@ protected:
   // timer information
 #ifdef _WIN32
   CWinIdleTimer m_idleTimer;
+  CWinIdleTimer m_screenSaverTimer;
 #else
   CStopWatch m_idleTimer;
+  CStopWatch m_screenSaverTimer;
 #endif
   CStopWatch m_restartPlayerTimer;
   CStopWatch m_frameTime;
   CStopWatch m_navigationTimer;
   CStopWatch m_slowTimer;
-  CStopWatch m_screenSaverTimer;
   CStopWatch m_shutdownTimer;
 
   bool m_bInhibitIdleShutdown;
@@ -433,7 +434,6 @@ protected:
   void UnMute();
 
   void SetHardwareVolume(float hardwareVolume);
-  void UpdateLCD();
 
   void VolumeChanged() const;
 

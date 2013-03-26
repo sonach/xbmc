@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -38,6 +38,9 @@ CDNSNameCache::~CDNSNameCache(void)
 
 bool CDNSNameCache::Lookup(const CStdString& strHostName, CStdString& strIpAddress)
 {
+  if (strHostName.empty() && strIpAddress.empty())
+    return false;
+
   // first see if this is already an ip address
   unsigned long address = inet_addr(strHostName.c_str());
   strIpAddress.Empty();

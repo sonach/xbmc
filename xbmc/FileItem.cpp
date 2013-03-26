@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -1721,7 +1721,7 @@ void CFileItemList::Assign(const CFileItemList& itemlist, bool append)
   m_cacheToDisc = itemlist.m_cacheToDisc;
 }
 
-bool CFileItemList::Copy(const CFileItemList& items)
+bool CFileItemList::Copy(const CFileItemList& items, bool copyItems /* = true */)
 {
   // assign all CFileItem parts
   *(CFileItem*)this = *(CFileItem*)&items;
@@ -1736,11 +1736,14 @@ bool CFileItemList::Copy(const CFileItemList& items)
   m_sortOrder      = items.m_sortOrder;
   m_sortIgnoreFolders = items.m_sortIgnoreFolders;
 
-  // make a copy of each item
-  for (int i = 0; i < items.Size(); i++)
+  if (copyItems)
   {
-    CFileItemPtr newItem(new CFileItem(*items[i]));
-    Add(newItem);
+    // make a copy of each item
+    for (int i = 0; i < items.Size(); i++)
+    {
+      CFileItemPtr newItem(new CFileItem(*items[i]));
+      Add(newItem);
+    }
   }
 
   return true;
@@ -2789,7 +2792,7 @@ CStdString CFileItem::GetLocalArt(const std::string &artFile, bool useFolder) co
     useFolder = true;
     strFile = GetLocalMetadataPath();
   }
-  else if (useFolder)
+  else if (useFolder && !(m_bIsFolder && !IsFileFolder()))
     strFile = URIUtils::GetDirectory(strFile);
 
   if (strFile.empty()) // empty filepath -> nothing to find

@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2011-2012 Team XBMC
+ *      Copyright (C) 2011-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -27,6 +27,7 @@
 #include "GUIInfoManager.h"
 #include "video/VideoThumbLoader.h"
 #include "Util.h"
+#include "cores/AudioEngine/Utils/AEUtil.h"
 #include "cores/VideoRenderers/RenderFlags.h"
 #include "cores/VideoRenderers/RenderFormats.h"
 #include "cores/VideoRenderers/RenderManager.h"
@@ -777,14 +778,36 @@ float CAMLPlayer::GetPercentage()
     return 0.0f;
 }
 
-void CAMLPlayer::SetVolume(float volume)
+void CAMLPlayer::SetMute(bool bOnOff)
 {
-  CLog::Log(LOGDEBUG, "CAMLPlayer::SetVolume(%f)", volume);
+  m_audio_mute = bOnOff;
 #if !defined(TARGET_ANDROID)
   CSingleLock lock(m_aml_csection);
-  // volume is a float percent from 0.0 to 1.0
   if (m_dll->check_pid_valid(m_pid))
-    m_dll->audio_set_volume(m_pid, volume);
+  {
+    if (m_audio_mute)
+      m_dll->audio_set_volume(m_pid, 0.0);
+    else
+      m_dll->audio_set_volume(m_pid, m_audio_volume);
+  }
+#endif
+}
+
+void CAMLPlayer::SetVolume(float volume)
+{
+  m_audio_volume = 0.0f;
+  if (volume > VOLUME_MINIMUM)
+  {
+    float dB = CAEUtil::PercentToGain(volume);
+    m_audio_volume = CAEUtil::GainToScale(dB);
+  }
+  if (m_audio_volume >= 0.99f)
+    m_audio_volume = 1.0f;
+
+#if !defined(TARGET_ANDROID)
+  CSingleLock lock(m_aml_csection);
+  if (!m_audio_mute && m_dll->check_pid_valid(m_pid))
+    m_dll->audio_set_volume(m_pid, m_audio_volume);
 #endif
 }
 
@@ -1090,6 +1113,8 @@ void CAMLPlayer::SeekTime(__int64 seek_ms)
     m_dll->player_timesearch(m_pid, (float)seek_ms/1000.0);
     WaitForSearchOK(5000);
     WaitForPlaying(5000);
+    // restore system volume setting.
+    SetVolume(m_audio_volume);
   }
 }
 
@@ -1439,6 +1464,9 @@ void CAMLPlayer::Process()
 
       // get our initial status.
       GetStatus();
+
+      // restore mute setting.
+      SetMute(g_settings.m_bMute);
 
       // restore system volume setting.
       SetVolume(g_settings.m_fVolumeLevel);
@@ -1815,8 +1843,15 @@ bool CAMLPlayer::WaitForSearchOK(int timeout_ms)
 
 bool CAMLPlayer::WaitForPlaying(int timeout_ms)
 {
+  // force the volume off in case we are starting muted
+  m_audio_mute = true;
   while (!m_bAbortRequest && (timeout_ms > 0))
   {
+#if !defined(TARGET_ANDROID)
+    // anoying that we have to hammer audio_set_volume
+    // but have to catch it before any audio comes out.
+    m_dll->audio_set_volume(m_pid, 0.0);
+#endif
     player_status pstatus = (player_status)GetPlayerSerializedState();
     if (m_log_level > 5)
       CLog::Log(LOGDEBUG, "CAMLPlayer::WaitForPlaying: %s", m_dll->player_status2str(pstatus));

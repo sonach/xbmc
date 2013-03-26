@@ -1,7 +1,7 @@
 #include "UPnPServer.h"
 #include "UPnPInternal.h"
 #include "Application.h"
-#include "GUIViewState.h"
+#include "view/GUIViewState.h"
 #include "Platinum.h"
 #include "video/VideoThumbLoader.h"
 #include "music/Artist.h"
@@ -201,6 +201,7 @@ NPT_String CUPnPServer::BuildSafeResourceUri(const NPT_HttpUrl &rooturi,
     else
       filename = URIUtils::GetFileName(file_path);
 
+    CURL::Encode(filename);
     md5state.append(file_path);
     md5state.getDigest(md5);
     md5 += "/" + filename;

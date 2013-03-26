@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -926,7 +926,7 @@ UINT CCdIoSupport::MsfSeconds(msf_t *msf)
 //    the total length of the disk, and
 //    the number of tracks.
 
-ULONG CCdIoSupport::CddbDiscId()
+uint32_t CCdIoSupport::CddbDiscId()
 {
   CSingleLock lock(*m_cdio);
 

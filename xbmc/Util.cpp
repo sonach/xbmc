@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -1508,7 +1508,7 @@ bool CUtil::MakeShortenPath(CStdString StrInput, CStdString& StrOutput, int iTex
 
 bool CUtil::SupportsWriteFileOperations(const CStdString& strPath)
 {
-  // currently only hd, smb, nfs and afp support delete and rename
+  // currently only hd, smb, nfs, afp and dav support delete and rename
   if (URIUtils::IsHD(strPath))
     return true;
   if (URIUtils::IsSmb(strPath))
@@ -1518,6 +1518,8 @@ bool CUtil::SupportsWriteFileOperations(const CStdString& strPath)
   if (URIUtils::IsNfs(strPath))
     return true;
   if (URIUtils::IsAfp(strPath))
+    return true;
+  if (URIUtils::IsDAV(strPath))
     return true;
   if (URIUtils::IsMythTV(strPath))
   {
@@ -1945,6 +1947,7 @@ void CUtil::ScanForExternalSubtitles(const CStdString& strMovie, std::vector<CSt
     for (int j=0; common_sub_dirs[j]; j++)
     {
       CStdString strPath2 = URIUtils::AddFileToFolder(strLookInPaths[i],common_sub_dirs[j]);
+      URIUtils::AddSlashAtEnd(strPath2);
       if (CDirectory::Exists(strPath2))
         strLookInPaths.push_back(strPath2);
     }

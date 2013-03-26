@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2005-2012 Team XBMC
+ *      Copyright (C) 2005-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -242,7 +242,12 @@ bool CGUIProgressControl::UpdateLayout(void)
     {
       bChanged |= m_guiMid.SetWidth(m_width);
       float x = posX, y = posY + offset, w = width, h = fScaleY * m_guiMid.GetTextureHeight();
-      m_guiMidClipRect = CRect(x, y, x + w, y + h);
+      CRect rect(x, y, x + w, y + h);
+      if (rect != m_guiMidClipRect)
+      {
+        m_guiMidClipRect = rect;
+        bChanged = true;
+      }
     }
     else
     {
@@ -276,7 +281,12 @@ bool CGUIProgressControl::UpdateLayout(void)
     {
       bChanged |= m_guiMid.SetWidth(fScaleX * fFullWidth);
       float x = posX, y = posY + offset, w =  fScaleX * fWidth, h = fScaleY * m_guiMid.GetTextureHeight();
-      m_guiMidClipRect = CRect(x, y, x + w, y + h);
+      CRect rect(x, y, x + w, y + h);
+      if (rect != m_guiMidClipRect)
+      {
+        m_guiMidClipRect = rect;
+        bChanged = true;
+      }
     }
     else
     {

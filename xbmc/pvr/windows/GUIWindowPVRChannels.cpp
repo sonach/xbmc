@@ -1,5 +1,5 @@
 /*
- *      Copyright (C) 2012 Team XBMC
+ *      Copyright (C) 2012-2013 Team XBMC
  *      http://www.xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
@@ -181,7 +181,11 @@ CPVRChannelGroupPtr CGUIWindowPVRChannels::SelectNextGroup(void)
 {
   CPVRChannelGroupPtr currentGroup = SelectedGroup();
   CPVRChannelGroupPtr nextGroup = currentGroup->GetNextGroup();
-  while (nextGroup && *nextGroup != *currentGroup && nextGroup->Size() == 0)
+  while (nextGroup && nextGroup->Size() == 0 &&
+      // break if the group matches
+      *nextGroup != *currentGroup &&
+      // or if we hit the first group
+      !nextGroup->IsInternalGroup())
     nextGroup = nextGroup->GetNextGroup();
 
   /* always update so users can reset the list */
