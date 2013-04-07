@@ -303,7 +303,7 @@ msgstr "当前播放"
 
 msgctxt "#31111"
 msgid "Extras"
-msgstr "其他"
+msgstr "应用"
 
 msgctxt "#31121"
 msgid "Currently"

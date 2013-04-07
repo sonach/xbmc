@@ -7,6 +7,7 @@
 			<posy>10</posy>
 			<width>220</width>
 			<height>700</height>
+			<visible>true</visible>
 			<control type="group">
 				<animation type="WindowOpen">
 					<effect type="fade" start="0" end="100" time="180" delay="180"/>
@@ -23,6 +24,7 @@
 					<height>90</height>
 					<texture>backgrounds/nowplaying_background.png</texture>
 				</control>
+				<!--
 				<control type="grouplist">
 					<posx>6</posx>
 					<posy>12</posy>
@@ -85,6 +87,7 @@
 						</control>
 					</control>
 				</control>
+				-->
 				<control type="group">
 					<animation type="Conditional" condition="ControlGroup(8210).HasFocus | ControlGroup(8220).HasFocus| ControlGroup(8230).HasFocus | ControlGroup(8240).HasFocus">
 						<effect type="fade" start="100" end="0" time="180"/>
@@ -190,8 +193,8 @@
 								<height>74</height>
 								<texturenofocus>menu/menu_top.png</texturenofocus>
 								<texturefocus>menu/menu_top_on.png</texturefocus>
-								<onclick>SetFocus(8210)</onclick>
-								<onright>Dialog.Close(51)</onright>
+								<onclick>SetFocus(8210)</onclick>								
+								<onright>Dialog.Close(51)</onright>								
 								<onup>8002</onup>
 								<ondown>8102</ondown>
 							</control>
@@ -203,8 +206,8 @@
 								<height>74</height>
 								<texturenofocus>menu/menu_center.png</texturenofocus>
 								<texturefocus>menu/menu_center_on.png</texturefocus>
-								<onclick>SetFocus(8210)</onclick>
-								<onright>Dialog.Close(51)</onright>
+								<onclick>SetFocus(8210)</onclick>							
+								<onright>Dialog.Close(51)</onright>								
 								<onup>8002</onup>
 								<ondown>8102</ondown>
 							</control>
@@ -429,6 +432,65 @@
 							</control>
 						</control>
 						<control type="group">
+							<description>Ap button</description>
+							<visible>Control.IsVisible(8106)</visible>
+							<width>220</width>
+							<height>74</height>
+							<control type="button" id="8106">
+								<posx>0</posx>
+								<posy>0</posy>
+								<width>220</width>
+								<height>74</height>
+								<texturenofocus>menu/menu_center.png</texturenofocus>
+								<texturefocus>menu/menu_center_on.png</texturefocus>
+								<onclick>SetFocus(8240)</onclick>
+								<onright>Dialog.Close(51)</onright>
+								<onup>8105</onup>
+								<ondown>8109</ondown>
+							</control>
+							<control type="image">
+								<visible>!Control.HasFocus(8106)</visible>
+								<posx>0</posx>
+								<posy>0</posy>
+								<width>74</width>
+								<height>74</height>
+								<texture>icons/icon_menu_extras.png</texture>
+								<colordiffuse>grey</colordiffuse>
+							</control>
+							<control type="image">
+								<visible>Control.HasFocus(8106)</visible>
+								<posx>0</posx>
+								<posy>0</posy>
+								<width>74</width>
+								<height>74</height>
+								<texture>icons/icon_menu_extras.png</texture>
+								<colordiffuse>green</colordiffuse>
+							</control>
+							<control type="label">
+								<visible>!Control.HasFocus(8106)</visible>
+								<posx>66</posx>
+								<posy>0</posy>
+								<width>144</width>
+								<height>74</height>
+								<aligny>center</aligny>
+								<label>31111</label>
+								<font>font23</font>
+								<textcolor>grey</textcolor>
+							</control>
+							<control type="label">
+								<visible>Control.HasFocus(8106)</visible>
+								<posx>66</posx>
+								<posy>0</posy>
+								<width>144</width>
+								<height>74</height>
+								<aligny>center</aligny>
+								<label>31111</label>
+								<font>font23</font>
+								<textcolor>green</textcolor>
+								<scroll>true</scroll>
+							</control>
+						</control>
+						<control type="group">
 							<description>Favorites button</description>
 							<visible>Control.IsVisible(8104)</visible>
 							<width>220</width>
@@ -489,124 +551,22 @@
 							</control>
 						</control>
 						<control type="group">
-							<description>Weather Button</description>
-							<visible>Control.IsVisible(8105)</visible>
+							<description>filler empty button</description>
+							<visible>true</visible>
 							<width>220</width>
 							<height>74</height>
-							<control type="button" id="8105">
+							<control type="button">
+								<enable>false</enable>
 								<posx>0</posx>
 								<posy>0</posy>
 								<width>220</width>
 								<height>74</height>
 								<texturenofocus>menu/menu_center.png</texturenofocus>
 								<texturefocus>menu/menu_center_on.png</texturefocus>
-								<onclick>ActivateWindow(MyWeather)</onclick>
-								<onclick>Dialog.Close(all,true)</onclick>
-								<onright>Dialog.Close(51)</onright>
-								<onup>8104</onup>
-								<ondown>8106</ondown>
+								<label>-</label>
+								<onclick>noop</onclick>
 							</control>
-							<control type="image">
-								<visible>!Control.HasFocus(8105)</visible>
-								<posx>0</posx>
-								<posy>0</posy>
-								<width>74</width>
-								<height>74</height>
-								<texture>icons/icon_menu_weather.png</texture>
-								<colordiffuse>grey</colordiffuse>
-							</control>
-							<control type="image">
-								<visible>Control.HasFocus(8105)</visible>
-								<posx>0</posx>
-								<posy>0</posy>
-								<width>74</width>
-								<height>74</height>
-								<texture>icons/icon_menu_weather.png</texture>
-								<colordiffuse>green</colordiffuse>
-							</control>
-							<control type="label">
-								<visible>!Control.HasFocus(8105)</visible>
-								<posx>66</posx>
-								<posy>0</posy>
-								<width>144</width>
-								<height>74</height>
-								<aligny>center</aligny>
-								<label>8</label>
-								<font>font23</font>
-								<textcolor>grey</textcolor>
-							</control>
-							<control type="label">
-								<visible>Control.HasFocus(8105)</visible>
-								<posx>66</posx>
-								<posy>0</posy>
-								<width>144</width>
-								<height>74</height>
-								<aligny>center</aligny>
-								<label>8</label>
-								<font>font23</font>
-								<textcolor>green</textcolor>
-								<scroll>true</scroll>
-							</control>
-						</control>
-						<control type="group">
-							<description>Extras button</description>
-							<visible>Control.IsVisible(8106)</visible>
-							<width>220</width>
-							<height>74</height>
-							<control type="button" id="8106">
-								<posx>0</posx>
-								<posy>0</posy>
-								<width>220</width>
-								<height>74</height>
-								<texturenofocus>menu/menu_center.png</texturenofocus>
-								<texturefocus>menu/menu_center_on.png</texturefocus>
-								<onclick>SetFocus(8240)</onclick>
-								<onright>Dialog.Close(51)</onright>
-								<onup>8105</onup>
-								<ondown>8109</ondown>
-							</control>
-							<control type="image">
-								<visible>!Control.HasFocus(8106)</visible>
-								<posx>0</posx>
-								<posy>0</posy>
-								<width>74</width>
-								<height>74</height>
-								<texture>icons/icon_menu_extras.png</texture>
-								<colordiffuse>grey</colordiffuse>
-							</control>
-							<control type="image">
-								<visible>Control.HasFocus(8106)</visible>
-								<posx>0</posx>
-								<posy>0</posy>
-								<width>74</width>
-								<height>74</height>
-								<texture>icons/icon_menu_extras.png</texture>
-								<colordiffuse>green</colordiffuse>
-							</control>
-							<control type="label">
-								<visible>!Control.HasFocus(8106)</visible>
-								<posx>66</posx>
-								<posy>0</posy>
-								<width>144</width>
-								<height>74</height>
-								<aligny>center</aligny>
-								<label>31111</label>
-								<font>font23</font>
-								<textcolor>grey</textcolor>
-							</control>
-							<control type="label">
-								<visible>Control.HasFocus(8106)</visible>
-								<posx>66</posx>
-								<posy>0</posy>
-								<width>144</width>
-								<height>74</height>
-								<aligny>center</aligny>
-								<label>31111</label>
-								<font>font23</font>
-								<textcolor>green</textcolor>
-								<scroll>true</scroll>
-							</control>
-						</control>
+						</control>						
 						<control type="group">
 							<description>filler empty button</description>
 							<visible>!Player.HasMedia</visible>
@@ -623,7 +583,7 @@
 								<label>-</label>
 								<onclick>noop</onclick>
 							</control>
-						</control>
+						</control>						
 						<control type="group">
 							<description>setting</description>
 							<width>220</width>
@@ -764,6 +724,7 @@
 								<onup>8109</onup>
 								<ondown>noop</ondown>
 							</control>
+							<!--
 							<control type="image" id="8133">
 								<description>left dotted line</description>
 								<posy>4</posy>
@@ -771,6 +732,7 @@
 								<height>33</height>
 								<texture>icons/dotted_line_divider.png</texture>
 							</control>
+							-->
 							<control type="button" id="8134">
 								<visible>System.HasLoginScreen + System.LoggedOn</visible>
 								<description>profile button</description>
@@ -791,6 +753,7 @@
 								<height>33</height>
 								<texture>icons/dotted_line_divider.png</texture>
 							</control>
+							<!--
 							<control type="button" id="8136">
 								<description>Eject button</description>
 								<width>25</width>
@@ -801,6 +764,7 @@
 								<onup>8109</onup>
 								<ondown>noop</ondown>
 							</control>
+							-->
 							<control type="image" id="8137">
 								<description>left dotted line</description>
 								<visible>Control.IsVisible(8138)</visible>
@@ -893,6 +857,7 @@
 								<onright>Dialog.Close(51)</onright>
 							</control>
 						</control>
+						<!--
 						<control type="group">
 							<description>TV Shows button</description>
 							<width>190</width>
@@ -939,6 +904,54 @@
 								<onclick>Dialog.Close(all,true)</onclick>
 								<onup>8212</onup>
 								<ondown>8214</ondown>
+								<onleft>SetFocus(8101)</onleft>
+								<onright>Dialog.Close(51)</onright>
+							</control>
+						</control>
+						-->
+						<control type="group">
+							<description>Addons button</description>
+							<width>190</width>
+							<height>74</height>
+							<control type="button" id="8216">
+								<visible>Library.HasContent(Video)</visible>
+								<posx>0</posx>
+								<posy>0</posy>
+								<width>190</width>
+								<height>74</height>
+								<align>right</align>
+								<texturenofocus>menu/submenu_center.png</texturenofocus>
+								<texturefocus>menu/submenu_center_on.png</texturefocus>
+								<label>$LOCALIZE[24001]</label>
+								<font>font23</font>
+								<textoffsetx>15</textoffsetx>
+								<textcolor>grey</textcolor>
+								<focusedcolor>green</focusedcolor>
+								<onclick>ActivateWindow(Videos,Addons,return)</onclick>
+								<onclick>Dialog.Close(all,true)</onclick>
+								<onup>8215</onup>
+								<ondown>noop</ondown>
+								<onleft>SetFocus(8101)</onleft>
+								<onright>Dialog.Close(51)</onright>
+							</control>
+							<control type="button" id="8216">
+								<visible>!Library.HasContent(Video)</visible>
+								<posx>0</posx>
+								<posy>0</posy>
+								<width>190</width>
+								<height>74</height>
+								<align>right</align>
+								<texturenofocus>menu/submenu_center.png</texturenofocus>
+								<texturefocus>menu/submenu_center_on.png</texturefocus>
+								<label>$LOCALIZE[24001]</label>
+								<font>font23</font>
+								<textoffsetx>15</textoffsetx>
+								<textcolor>grey</textcolor>
+								<focusedcolor>green</focusedcolor>
+								<onclick>ActivateWindow(Videos,Addons,return)</onclick>
+								<onclick>Dialog.Close(all,true)</onclick>
+								<onup>8215</onup>
+								<ondown>noop</ondown>
 								<onleft>SetFocus(8101)</onleft>
 								<onright>Dialog.Close(51)</onright>
 							</control>
@@ -992,54 +1005,7 @@
 								<onleft>SetFocus(8101)</onleft>
 								<onright>Dialog.Close(51)</onright>
 							</control>
-						</control>
-						<control type="group">
-							<description>Addons button</description>
-							<width>190</width>
-							<height>74</height>
-							<control type="button" id="8216">
-								<visible>Library.HasContent(Video)</visible>
-								<posx>0</posx>
-								<posy>0</posy>
-								<width>190</width>
-								<height>74</height>
-								<align>right</align>
-								<texturenofocus>menu/submenu_center.png</texturenofocus>
-								<texturefocus>menu/submenu_center_on.png</texturefocus>
-								<label>$LOCALIZE[24001]</label>
-								<font>font23</font>
-								<textoffsetx>15</textoffsetx>
-								<textcolor>grey</textcolor>
-								<focusedcolor>green</focusedcolor>
-								<onclick>ActivateWindow(Videos,Addons,return)</onclick>
-								<onclick>Dialog.Close(all,true)</onclick>
-								<onup>8215</onup>
-								<ondown>noop</ondown>
-								<onleft>SetFocus(8101)</onleft>
-								<onright>Dialog.Close(51)</onright>
-							</control>
-							<control type="button" id="8216">
-								<visible>!Library.HasContent(Video)</visible>
-								<posx>0</posx>
-								<posy>0</posy>
-								<width>190</width>
-								<height>74</height>
-								<align>right</align>
-								<texturenofocus>menu/submenu_center.png</texturenofocus>
-								<texturefocus>menu/submenu_center_on.png</texturefocus>
-								<label>$LOCALIZE[24001]</label>
-								<font>font23</font>
-								<textoffsetx>15</textoffsetx>
-								<textcolor>grey</textcolor>
-								<focusedcolor>green</focusedcolor>
-								<onclick>ActivateWindow(Videos,Addons,return)</onclick>
-								<onclick>Dialog.Close(all,true)</onclick>
-								<onup>8215</onup>
-								<ondown>noop</ondown>
-								<onleft>SetFocus(8101)</onleft>
-								<onright>Dialog.Close(51)</onright>
-							</control>
-						</control>
+						</control>						
 						<control type="group">
 							<width>190</width>
 							<height>37</height>
@@ -1061,6 +1027,32 @@
 								<posy>0</posy>
 								<width>190</width>
 								<height>37</height>
+								<texturenofocus>menu/submenu_center_title.png</texturenofocus>
+								<texturefocus>menu/submenu_center_title.png</texturefocus>
+								<onclick>noop</onclick>
+							</control>
+						</control>
+						<control type="group">
+							<width>190</width>
+							<height>74</height>
+							<control type="button">
+								<posx>0</posx>
+								<posy>0</posy>
+								<width>190</width>
+								<height>74</height>
+								<texturenofocus>menu/submenu_center_title.png</texturenofocus>
+								<texturefocus>menu/submenu_center_title.png</texturefocus>
+								<onclick>noop</onclick>
+							</control>
+						</control>
+						<control type="group">
+							<width>190</width>
+							<height>74</height>
+							<control type="button">
+								<posx>0</posx>
+								<posy>0</posy>
+								<width>190</width>
+								<height>74</height>
 								<texturenofocus>menu/submenu_center_title.png</texturenofocus>
 								<texturefocus>menu/submenu_center_title.png</texturefocus>
 								<onclick>noop</onclick>
@@ -1400,7 +1392,7 @@
 								<textcolor>grey</textcolor>
 								<focusedcolor>green</focusedcolor>
 								<onclick>Dialog.Close(all,true)</onclick>
-								<onclick condition="!Window.IsActive(600)">ActivateWindowAndFocus(PVR,32,0)</onclick>
+								<onclick>ActivateWindowAndFocus(PVR,32,0)</onclick>
 								<onclick>SetFocus(11)</onclick>
 								<onup>noop</onup>
 								<ondown>8232</ondown>
@@ -1426,7 +1418,7 @@
 								<textcolor>grey</textcolor>
 								<focusedcolor>green</focusedcolor>
 								<onclick>Dialog.Close(all,true)</onclick>
-								<onclick condition="!Window.IsActive(600)">ActivateWindowAndFocus(PVR,33,0)</onclick>
+								<onclick>ActivateWindowAndFocus(PVR,33,0)</onclick>
 								<onclick>SetFocus(11)</onclick>
 								<onup>8231</onup>
 								<ondown>8233</ondown>
@@ -1452,7 +1444,7 @@
 								<textcolor>grey</textcolor>
 								<focusedcolor>green</focusedcolor>
 								<onclick>Dialog.Close(all,true)</onclick>
-								<onclick condition="!Window.IsActive(600)">ActivateWindowAndFocus(PVR,31,0)</onclick>
+								<onclick>ActivateWindowAndFocus(PVR,31,0)</onclick>
 								<onclick>SetFocus(11)</onclick>
 								<onup>8232</onup>
 								<ondown>8234</ondown>
@@ -1478,7 +1470,7 @@
 								<textcolor>grey</textcolor>
 								<focusedcolor>green</focusedcolor>
 								<onclick>Dialog.Close(all,true)</onclick>
-								<onclick condition="!Window.IsActive(600)">ActivateWindowAndFocus(PVR,34,0)</onclick>
+								<onclick>ActivateWindowAndFocus(PVR,34,0)</onclick>
 								<onclick>SetFocus(11)</onclick>
 								<onup>8233</onup>
 								<ondown>8235</ondown>

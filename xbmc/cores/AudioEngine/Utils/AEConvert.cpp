@@ -155,11 +155,7 @@ unsigned int CAEConvert::S16LE_Float(uint8_t* data, const unsigned int samples, 
 {
   static const float mul = 1.0f / (INT16_MAX + 0.5f);
 
-<<<<<<< HEAD
-#if defined(__ARM_NEON__)
-=======
 #if defined(__ARM_NEON__) || (defined(__VFP_FP__) && !defined(__SOFTFP__))
->>>>>>> origin/master
   for (unsigned int i = 0; i < samples; i++)
   {
     __asm__ __volatile__ (
@@ -190,11 +186,7 @@ unsigned int CAEConvert::S16BE_Float(uint8_t* data, const unsigned int samples, 
 {
   static const float mul = 1.0f / (INT16_MAX + 0.5f);
 
-<<<<<<< HEAD
-#if defined(__ARM_NEON__)
-=======
 #if defined(__ARM_NEON__) || (defined(__VFP_FP__) && !defined(__SOFTFP__))
->>>>>>> origin/master
   for (unsigned int i = 0; i < samples; i++)
   {
     __asm__ __volatile__ (

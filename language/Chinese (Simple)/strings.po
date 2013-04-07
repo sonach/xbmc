@@ -28,7 +28,7 @@ msgstr "音乐"
 
 msgctxt "#3"
 msgid "Videos"
-msgstr "视频"
+msgstr "影视"
 
 msgctxt "#4"
 msgid "TV-Guide"
@@ -1208,7 +1208,7 @@ msgstr "播放光盘"
 
 msgctxt "#342"
 msgid "Movies"
-msgstr "电影"
+msgstr "推荐影视"
 
 msgctxt "#343"
 msgid "Adjust framerate"
@@ -2528,7 +2528,7 @@ msgstr "黄色"
 
 msgctxt "#744"
 msgid "Files"
-msgstr "文件"
+msgstr "本地影视"
 
 msgctxt "#745"
 msgid "No scanned information for this view"
@@ -2896,7 +2896,7 @@ msgstr "启用子菜单按钮"
 
 msgctxt "#1036"
 msgid "Favourites"
-msgstr "收藏夹"
+msgstr "收藏"
 
 msgctxt "#1037"
 msgid "Video Add-ons"
@@ -4956,7 +4956,7 @@ msgstr "改变地区码 3"
 
 msgctxt "#14022"
 msgid "Library"
-msgstr "资料库"
+msgstr "播放列表"
 
 msgctxt "#14023"
 msgid "No TV"
@@ -9740,7 +9740,7 @@ msgstr "扩展功能"
 
 msgctxt "#24001"
 msgid "Add-ons"
-msgstr "扩展功能"
+msgstr "影视应用"
 
 msgctxt "#24002"
 msgid "Add-on options"
