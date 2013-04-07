@@ -881,7 +881,7 @@ void CGUISettings::Initialize()
   AddString(laf, "lookandfeel.skinsettings", 21417, "", BUTTON_CONTROL_STANDARD);
   AddString(laf, "lookandfeel.skintheme",15111,"SKINDEFAULT", SPIN_CONTROL_TEXT);
   AddString(laf, "lookandfeel.skincolors",14078, "SKINDEFAULT", SPIN_CONTROL_TEXT);
-  AddString(laf, "lookandfeel.font",13303,"Default", SPIN_CONTROL_TEXT);
+  AddString(laf, "lookandfeel.font",13303,"Arial", SPIN_CONTROL_TEXT);
   AddInt(laf, "lookandfeel.skinzoom",20109, 0, -20, 2, 20, SPIN_CONTROL_INT, MASK_PERCENT);
   AddInt(laf, "lookandfeel.startupwindow",512,1, WINDOW_HOME, 1, WINDOW_PYTHON_END, SPIN_CONTROL_TEXT);
   AddString(laf, "lookandfeel.soundskin",15108,"SKINDEFAULT", SPIN_CONTROL_TEXT);
@@ -890,9 +890,9 @@ void CGUISettings::Initialize()
   AddString(laf, "lookandfeel.rssedit", 21450, "", BUTTON_CONTROL_STANDARD);
 
   CSettingsCategory* loc = AddCategory(SETTINGS_APPEARANCE, "locale", 14090);
-  AddString(loc, "locale.language",248,"English", SPIN_CONTROL_TEXT);
-  AddString(loc, "locale.country", 20026, "USA (12h)", SPIN_CONTROL_TEXT);
-  AddString(loc, "locale.charset", 14091, "DEFAULT", SPIN_CONTROL_TEXT); // charset is set by the language file
+  AddString(loc, "locale.language",248,"Chinese (Simple)", SPIN_CONTROL_TEXT);
+  AddString(loc, "locale.country", 20026, "Beijing (12h)", SPIN_CONTROL_TEXT);
+  AddString(loc, "locale.charset", 14091, "Chinese Simplified (GBK)", SPIN_CONTROL_TEXT); // charset is set by the language file
 
   bool use_timezone = false;
 
