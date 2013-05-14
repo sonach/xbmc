@@ -30,8 +30,8 @@
 #if defined(HAS_OMXPLAYER)
 #include "cores/omxplayer/OMXPlayer.h"
 #endif
-#if defined(HAS_HISPLAYER)
-#include "cores/hisplayer/HISPlayer.h"
+#if defined(HAS_ANDROIDPLAYER)
+#include "cores/androidplayer/AndroidPlayer.h"
 #endif
 #include "cores/ExternalPlayer/ExternalPlayer.h"
 #ifdef HAS_UPNP
@@ -114,8 +114,8 @@ public:
 #if defined(HAS_OMXPLAYER)
       case EPC_OMXPLAYER: pPlayer = new COMXPlayer(callback); break;
 #endif
-#if defined(HAS_HISPLAYER)
-			case EPC_HISPLAYER: pPlayer = new CHISPlayer(callback); break;
+#if defined(HAS_ANDROIDPLAYER)
+      case EPC_ANDROIDPLAYER: pPlayer = new CAndroidPlayer(callback); break;
 #endif	
 #if defined(HAS_UPNP)
       case EPC_UPNPPLAYER: pPlayer = new UPNP::CUPnPPlayer(callback, m_id.c_str()); break;
