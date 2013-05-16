@@ -1,0 +1,15 @@
+.PHONY: compile
+
+#INCLUDES += -I$(prefix)/include/amlplayer
+
+SRCS = AndroidPlayer.cpp
+#SRCS+= FileURLProtocol.cpp
+
+LIB  = androidplayer.a
+
+@abs_top_srcdir@/system/advancedsettings.xml: $(LIB)
+	cp -f androidplayer_advancedsettings.xml $@
+
+include @abs_top_srcdir@/Makefile.include
+-include $(patsubst %.cpp,%.P,$(patsubst %.c,%.P,$(SRCS)))
+
